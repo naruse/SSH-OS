@@ -530,7 +530,8 @@ static void make_pair(void)
     static const u8 base[32] = {9};
 
     rng_bytes(ssh.secret, 32);
-    x25519(ssh.q_c, ssh.secret, base);
+    if (copro_x25519(ssh.q_c, ssh.secret, base) != 0)
+        x25519(ssh.q_c, ssh.secret, base);
     ssh.have_pair = 1;
 }
 
@@ -899,7 +900,8 @@ static int key_exchange(const char *host)
         return fail("the server changed its key in mid-connection");
 
     kputs("Working out the shared secret");
-    x25519(k, ssh.secret, qs);
+    if (copro_x25519(k, ssh.secret, qs) != 0)
+        x25519(k, ssh.secret, qs);
     kputc('\n');
     if (crypto_stop)
         return fail("stopped");
@@ -918,7 +920,9 @@ static int key_exchange(const char *host)
     sha256_finish(&h, hash);
 
     kputs("Checking the server's signature");
-    r = ed25519_verify(sig, hash, 32, server_key);
+    r = copro_ed25519_verify(sig, hash, 32, server_key);
+    if (r < 0)
+        r = ed25519_verify(sig, hash, 32, server_key);
     kputc('\n');
     if (crypto_stop)
         return fail("stopped");
@@ -1071,7 +1075,8 @@ static int authenticate(const char *user, const char *host)
         memcpy(scratch + 4, ssh.session_id, 32);
         memcpy(scratch + 36, tx + 5, tx_len);
         kputs("Signing in with the key");
-        ed25519_sign(sig, scratch, 36 + tx_len, key, key + 32);
+        if (copro_ed25519_sign(sig, scratch, 36 + tx_len, key, key + 32) != 0)
+            ed25519_sign(sig, scratch, 36 + tx_len, key, key + 32);
         kputc('\n');
         if (crypto_stop)
             return fail("stopped");
@@ -1324,7 +1329,8 @@ static int offer_key(const char *user, const char *host)
     if (!have) {
         kputs("Making this Macintosh's own key");
         rng_bytes(key, 32);
-        ed25519_public(key + 32, key);
+        if (copro_ed25519_public(key + 32, key) != 0)
+            ed25519_public(key + 32, key);
         kputc('\n');
         if (crypto_stop) {
             memset(key, 0, sizeof key);

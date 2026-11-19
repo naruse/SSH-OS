@@ -88,6 +88,15 @@ void ed25519_public(u8 *pub32, const u8 *seed32);
 void ed25519_sign(u8 *sig64, const u8 *msg, u32 len, const u8 *seed32, const u8 *pub32);
 int  ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub32);    /* 1 = genuine */
 
+/* copro.c: the same sums done by a BlueSCSI with SSH OS's firmware addition.
+ * Each returns -1 if there is none (do the sum here then), else 0, or for
+ * the check 1 = genuine and 0 = not. */
+int  copro_present(void);
+int  copro_x25519(u8 *out32, const u8 *scalar32, const u8 *point32);
+int  copro_ed25519_public(u8 *pub32, const u8 *seed32);
+int  copro_ed25519_sign(u8 *sig64, const u8 *msg, u32 len, const u8 *seed32, const u8 *pub32);
+int  copro_ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub32);
+
 /* rng.c: random numbers gathered from the timing of keys, mouse and network */
 void rng_init(void);
 void rng_stir(u32 value);       /* something just happened; may be called from an interrupt */

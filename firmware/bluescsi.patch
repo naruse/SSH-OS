@@ -1,0 +1,66 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9d973b4..98d89be 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -149,6 +149,11 @@ set(SCSI2SD_SOURCES
+     lib/SCSI2SD/src/firmware/floppy.c
+     lib/SCSI2SD/src/firmware/mo.c
+     lib/SCSI2SD/src/firmware/AmigaWIFI/AmigaWIFI.c
++    # SSH OS: the sums of an SSH log-in for a Macintosh (see lib/SSHOS)
++    lib/SSHOS/sshos_crypto.c
++    lib/SSHOS/w_x25519.c
++    lib/SSHOS/w_ed25519.c
++    lib/SSHOS/w_sha512.c
+ )
+ 
+ # External dependencies fetched from GitHub
+diff --git a/lib/SCSI2SD/src/firmware/network.c b/lib/SCSI2SD/src/firmware/network.c
+index e15501f..4f23fdf 100644
+--- a/lib/SCSI2SD/src/firmware/network.c
++++ b/lib/SCSI2SD/src/firmware/network.c
+@@ -22,6 +22,7 @@
+ #include "scsiPhy.h"
+ #include "config.h"
+ #include "network.h"
++#include "../../../SSHOS/sshos_crypto.h"
+ 
+ extern int platform_network_send(uint8_t *buf, size_t len);
+ 
+@@ -455,6 +456,37 @@ int scsiNetworkCommand()
+ 		// set mode (ignored)
+ 		break;
+ 
++	// SSH OS (github.com/naruse/SSH-OS): the slow sums of an SSH log-in, done
++	// here for a Macintosh whose 68000 would take a quarter of a minute each.
++	// One opcode, the request in cdb[1]; see lib/SSHOS/sshos_crypto.c.
++	case SSHOS_CRYPTO_CMD:
++		if (scsiDev.cdb[1] == SSHOS_HELLO)
++		{
++			scsiDev.dataLen = sshos_crypto_hello(scsiDev.data);
++			scsiDev.phase = DATA_IN;
++		}
++		else if (scsiDev.cdb[1] == SSHOS_RESULT)
++		{
++			scsiDev.dataLen = sshos_crypto_result(scsiDev.data, size);
++			scsiDev.phase = DATA_IN;
++		}
++		else if (size == 0 || size > SSHOS_CRYPTO_MAX)
++		{
++			scsiDev.status = CHECK_CONDITION;
++			scsiDev.phase = STATUS;
++		}
++		else
++		{
++			parityError = 0;
++			scsiEnterPhase(DATA_OUT);
++			scsiRead(scsiDev.data, size, &parityError);
++			sshos_crypto_job(scsiDev.cdb[1], scsiDev.data, size);
++			memset(scsiDev.data, 0, size);		// it may have held a secret
++			scsiDev.status = GOOD;
++			scsiDev.phase = STATUS;
++		}
++		break;
++
+ 	// custom wifi commands all using the same opcode, with a sub-command in cdb[1]
+ 	case SCSI_NETWORK_WIFI_CMD:
+ 		DBGMSG_F("------ in scsiNetworkCommand with wi-fi command 0x%02x (size %d)", scsiDev.cdb[1], size);

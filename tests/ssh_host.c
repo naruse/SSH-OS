@@ -342,6 +342,16 @@ int ask_password(const char *user, const char *host, char *line, int max)
     return kbd_ask_line(line, max, 0);
 }
 
+/* No BlueSCSI here to do the sums. */
+int copro_x25519(u8 *out32, const u8 *scalar32, const u8 *point32)
+{ (void)out32; (void)scalar32; (void)point32; return -1; }
+int copro_ed25519_public(u8 *pub32, const u8 *seed32)
+{ (void)pub32; (void)seed32; return -1; }
+int copro_ed25519_sign(u8 *sig64, const u8 *msg, u32 len, const u8 *seed32, const u8 *pub32)
+{ (void)sig64; (void)msg; (void)len; (void)seed32; (void)pub32; return -1; }
+int copro_ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub32)
+{ (void)sig64; (void)msg; (void)len; (void)pub32; return -1; }
+
 int ask_keyless(const char *user, const char *host, int make)
 {
     (void)user; (void)host; (void)make;

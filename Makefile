@@ -55,7 +55,7 @@ ASFLAGS := -m68000 -Wa,--register-prefix-optional
 KOBJS := $(addprefix $(B)/, start.o kmain.o machine.o console.o serial.o \
            kprintf.o trap.o via.o adb.o kbd.o timer.o scsi.o dayna.o net.o tcp.o \
            config.o cfgdata.o sha256.o gfx.o shell.o \
-           cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o polymul.o rng.o ssh.o bench.o lib.o \
+           cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o polymul.o copro.o rng.o ssh.o bench.o lib.o \
            desk.o bar.o barmenu.o snd.o wifi.o hwtest.o fs.o saved.o ask.o connect.o vt.o splash.o settings.o banner.o icons.o font6x10.o)
 
 all: $(B)/sshos-800k.dsk $(B)/sshos-1440k.dsk $(B)/sshos-boot.hda
@@ -287,8 +287,17 @@ test-ssh-host: $(B)/font6x10.c | $(B)
 		$(addprefix kernel/, sha256.c config.c x25519.c sha512.c poly1305.c ed25519.c ssh.c saved.c vt.c)
 	python3 -m unittest tests.test_ssh
 
-test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-ownkey \
-          test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-vt-model
+test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-ownkey test-copro \
+          test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-vt-model test-fw-host
+
+# The BlueSCSI's side of the crypto hand-off (firmware/sshos_crypto.c), built
+# for this computer and asked for the published answers.
+test-fw-host: | $(B)
+	cc -std=gnu11 -g -O1 -Wall -Wextra -fsanitize=address,undefined \
+		-fno-sanitize-recover=undefined -include tests/host_types.h -Ikernel \
+		-o $(B)/fw_host tests/fw_host.c firmware/sshos_crypto.c \
+		kernel/x25519.c kernel/ed25519.c kernel/sha512.c
+	$(B)/fw_host
 
 run: $(B)/sshos-800k.dsk
 	"$(SNOW_APP)" "$(ROM)" --floppy $(B)/sshos-800k.dsk
@@ -384,6 +393,29 @@ test-wifi:
 #   lists the earlier connection, and connecting asks nothing.
 # In between and afterwards tools/sshosdisk.py, which shares no code with the
 # kernel, checks the volume and reads the files.
+# Handing SSH's slow sums to the BlueSCSI (kernel/copro.c). No emulator has
+# a BlueSCSI with our firmware addition, so SSH OS is built with
+# -DCOPRO_FAKE: the firmware's side (firmware/sshos_crypto.c) is linked in
+# and answers in its place. A log-in then goes through the same requests
+# and answers as with the real thing; the server accepting it shows the
+# sums came back right. All four must have gone that way.
+test-copro:
+	python3 tests/ssh_fixture.py build-copro 22028
+	$(MAKE) B=build-copro KFLAGS=-DCOPRO_FAKE CONFIG=build-copro/config-ssh.txt build-copro/sshos-800k.dsk
+	@: > build-copro/sshd.log; /usr/sbin/sshd -D -E "$(CURDIR)/build-copro/sshd.log" \
+		-f "$(CURDIR)/build-copro/sshd/sshd_config" & pid=$$!; \
+	trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
+	"$(JUANRUN)" --rom "$(ROM)" --floppy build-copro/sshos-800k.dsk --net 4 \
+		--until SSHOS-BOOT-OK --cycles 3500000000 --prompt '> ' --prompt 'ready>' \
+		--type 'ssh\necho result-$$((6*7))\nexit\n\puptime\n' \
+		--done 'stray interrupts' --out build-copro/test
+	@sed -n '/^> ssh/,$$p' build-copro/test.serial.txt
+	@grep -q 'COPRO: the BlueSCSI does the sums' build-copro/test.serial.txt
+	@test "$$(grep -c 'COPRO: a sum done by the BlueSCSI' build-copro/test.serial.txt)" = 4
+	@grep -q '^result-42' build-copro/test.serial.txt
+	@grep -q 'Accepted publickey' build-copro/sshd.log
+	@echo "Hand-off test passed."
+
 # The key SSH OS makes for itself. First start: log in (with the test's key,
 # and the setting ssh_offer_key so that the question comes as it would after
 # a password), say yes: the SE makes its key, keeps it on its disk and adds
@@ -481,4 +513,5 @@ clean:
 .PHONY: all test test-crash test-scsi test-net test-tcp test-vt-model demo test-ssh test-desk \
         test-net-host test-misc-host test-crypto-host test-ssh-host bench test-all run tools \
         test-disk test-fs-host test-wifi test-ownkey test-hdboot test-vt-host release \
+        test-copro test-fw-host \
         disasm clean
