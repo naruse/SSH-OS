@@ -1,5 +1,7 @@
 # SSH OS
 
+[![Tests](https://github.com/naruse/SSH-OS/actions/workflows/tests.yml/badge.svg)](https://github.com/naruse/SSH-OS/actions/workflows/tests.yml)
+
 An operating system for the Macintosh SE, written from scratch, whose main job
 is to be an SSH terminal. It starts from a BlueSCSI in a few seconds, joins
 your WiFi, and logs in to other computers by itself: a real SSH client on an
@@ -200,8 +202,9 @@ and the volume. Both are kept on the SSH OS disk.
 photograph of one: the sockets of the back panel along the top, the memory
 along the bottom. Each numbered part has a field beside it with what it
 reports now (the last key, where the mouse is, what answers on the SCSI
-bus) and, where there is something to try, a button: Ping, Beep, Test. The
+bus) and, where there is something to try, a button: Ping, Play, Test. The
 keys P, B, S and M do the same; + and - change the volume; Esc goes back.
+Play plays a tune and turns into Stop while it lasts.
 
 ![The memory test](docs/memtest.png)
 
@@ -508,7 +511,8 @@ keyboard and mouse would need their own driver.
     firmware adds to its network adapter (`kernel/wifi.c`, written from the
     firmware's source). Snow's adapter has none of them, so in the emulator
     they only run against a made-up adapter (`make test-wifi`).
-  - Sound is a beep (hardware test, SSH's bell, the volume control).
+  - Sound is a beep (SSH's bell, the volume control) and one tune: the
+    hardware test plays "La cucaracha" in square waves.
   - The clock cannot be set.
   - Shut down cannot switch the SE off (it has a mechanical switch); it stops
     the network and says the Mac can be switched off.

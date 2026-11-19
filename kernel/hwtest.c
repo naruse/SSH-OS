@@ -125,7 +125,7 @@ static const struct { s16 y, h; const char *name, *button; } fields[F_COUNT] = {
     {46, 38, "Keyboard and mouse", 0},
     {88, 38, "SCSI", 0},
     {130, 30, "Network", "Ping"},
-    {164, 30, "Sound", "Beep"},
+    {164, 30, "Sound", "Play"},
     {198, 30, "Screen", "Test"},
     {232, 30, "Memory", "Test"},
     {266, 30, "Processor", 0},
@@ -149,6 +149,18 @@ static void say(int f, int row, const char *text)
     gfx_end();
 }
 
+/* A field's button, with these words on it (the sound's says Play, or Stop
+ * while the tune plays). */
+static void draw_button(int f, const char *words)
+{
+    int y = fields[f].y;
+
+    gfx_begin();
+    gfx_round_box(BTN_X, y + 7, BTN_W, 16, GFX_WHITE, 1);
+    gfx_text(BTN_X + (BTN_W - gfx_text_width(words, 1)) / 2, y + 10, words, 0, 1, 0);
+    gfx_end();
+}
+
 static void draw_field(int f)
 {
     char n[2] = {(char)('1' + f), 0};
@@ -160,11 +172,9 @@ static void draw_field(int f)
     gfx_fill(F_X, y, 14, h, GFX_BLACK);
     gfx_text(F_X + 4, y + h / 2 - 5, n, 1, 1, 1);
     gfx_text(F_TEXT, y + 4, fields[f].name, 0, 1, 1);
-    if (fields[f].button) {
-        gfx_round_box(BTN_X, y + 7, BTN_W, 16, GFX_WHITE, 1);
-        gfx_text(BTN_X + (BTN_W - gfx_text_width(fields[f].button, 1)) / 2, y + 10, fields[f].button, 0, 1, 0);
-    }
     gfx_end();
+    if (fields[f].button)
+        draw_button(f, fields[f].button);
 }
 
 /* Which field's button is at this point? -1 if none. */
@@ -270,6 +280,30 @@ static void show_network(void)
         say(F_NET, 0, "not started");
     }
 }
+
+/* What the sound test plays: "La cucaracha", the old song. Steps are
+ * 65536 * pitch / 22254 (see snd.c); a short note is nine ticks. */
+#define N_G4 1154
+#define N_A4 1296
+#define N_B4 1454
+#define N_C5 1541
+#define N_D5 1730
+#define N_E5 1942
+#define N_F5 2057
+#define N_G5 2309
+#define N_A5 2591
+static const struct snd_note cucaracha[] = {
+    /* La cu-ca-ra-cha, la cu-ca-ra-cha, */
+    {N_G4, 9}, {N_G4, 9}, {N_G4, 9}, {N_C5, 27}, {N_E5, 18},
+    {N_G4, 9}, {N_G4, 9}, {N_G4, 9}, {N_C5, 27}, {N_E5, 18},
+    /* ya no pue-de ca-mi-nar; */
+    {N_C5, 9}, {N_C5, 9}, {N_B4, 9}, {N_B4, 9}, {N_A4, 9}, {N_A4, 9}, {N_G4, 36}, {0, 9},
+    /* por-que no tie-ne, por-que le fal-ta */
+    {N_G4, 9}, {N_G4, 9}, {N_G4, 9}, {N_B4, 27}, {N_D5, 18},
+    {N_G4, 9}, {N_G4, 9}, {N_G4, 9}, {N_B4, 27}, {N_D5, 18},
+    /* las dos pa-ti-tas de a-tras. */
+    {N_G5, 9}, {N_A5, 9}, {N_G5, 9}, {N_F5, 9}, {N_E5, 9}, {N_D5, 9}, {N_C5, 36},
+};
 
 static void show_sound(void)
 {
@@ -565,13 +599,17 @@ void cmd_hwtest(void)
     static const char hex[] = "0123456789ABCDEF";
     u32 seen = mouse.moves - 1, clicks = mouse.clicks;
     char text[40], *t;
-    int ev, r, what;
+    int ev, r, what, playing = 0;
     u8 ch, raw;
 
     draw_all();
     clicks = mouse.clicks;
     for (;;) {
         net_poll();
+        if (snd_playing() != playing) {         /* the button says what a press would do */
+            playing = snd_playing();
+            draw_button(F_SOUND, playing ? "Stop" : "Play");
+        }
         if (seen != mouse.moves) {
             seen = mouse.moves;
             t = number(text, (u32)mouse.x);
@@ -631,18 +669,25 @@ void cmd_hwtest(void)
             }
         }
         if (what == F_SOUND) {
-            snd_beep(20);
-            result("Beep. Did you hear it?");
+            if (snd_playing()) {                /* a second press stops it */
+                snd_stop();
+                result("Stopped");
+            } else {
+                snd_tune(cucaracha, (int)(sizeof cucaracha / sizeof cucaracha[0]));
+                result("La cucaracha. Did you hear it?");
+            }
         } else if (what == F_MEMORY) {
             test_memory();
             clicks = mouse.clicks;
         } else if (what == F_SCREEN) {
             test_screen();
             draw_all();
+            playing = 0;                        /* drawn afresh: it says Play again */
             clicks = mouse.clicks;
         } else if (what == F_NET) {
             ping_gateway();
         }
     }
+    snd_stop();                 /* a tune does not follow you out */
     kbd_escape = 0;
 }

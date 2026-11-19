@@ -106,6 +106,10 @@ void snd_init(void);
 void snd_from_settings(void);   /* take the volume from the setting "volume" */
 void snd_keep_volume(void);     /* save it as that setting */
 void snd_beep(u32 nticks);      /* returns at once */
+struct snd_note { u16 step; u8 ticks; };        /* step: 65536 * pitch / 22254; 0 = a rest */
+void snd_tune(const struct snd_note *notes, int count);     /* returns at once */
+int  snd_playing(void);
+void snd_stop(void);
 int  snd_volume(void);          /* 0 (off) to 7 */
 void snd_set_volume(int v);
 void snd_tick(void);            /* from the 60 Hz interrupt */
