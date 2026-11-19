@@ -1,0 +1,79 @@
+# The tests, on every push.
+#
+# Two jobs. The first needs nothing but this repository: the parts of SSH OS
+# that are also built for an ordinary computer (network, ciphers, SSH,
+# terminal, file system, settings). It runs for pull requests too.
+#
+# The second runs SSH OS itself in the Snow emulator, which cannot start a
+# Macintosh SE without Apple's ROM. That ROM is Apple's and is not in this
+# repository: the job takes it from a private repository named by the
+# variable ROM_REPO, with the token in the secret ROM_REPO_TOKEN (see
+# "Tests on GitHub" in the README). Without those two it is skipped, and it
+# never runs for pull requests, which are not given secrets.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host:
+    name: Without the emulator
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests built for this computer
+        run: |
+          for t in test-net-host test-misc-host test-crypto-host test-vt-host \
+                   test-fs-host test-helper test-ssh-host; do
+            echo "::group::$t"
+            make "$t"
+            echo "::endgroup::"
+          done
+
+  emulator:
+    name: In the emulated SE
+    if: github.event_name == 'push' && vars.ROM_REPO != ''
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      # the commit of Snow the test runner (tools/snowrun) was written against
+      SNOW_COMMIT: 0cf9960
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apple's ROM, from the private repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.ROM_REPO }}
+          token: ${{ secrets.ROM_REPO_TOKEN }}
+          path: rom-private
+      - name: Put the ROM where the Makefile looks for it
+        run: |
+          rom="$(find rom-private -iname '*.rom' | head -1)"
+          test -n "$rom" || { echo "no .ROM file in the private repository"; exit 1; }
+          cp "$rom" "B306E171 - Mac SE FDHD.ROM"
+      - name: Cross compiler
+        run: brew install m68k-elf-gcc m68k-elf-binutils
+      - name: Snow, for the test runner
+        run: |
+          git clone https://github.com/twvd/snow.git "$HOME/.cache/juanos/snow-src"
+          git -C "$HOME/.cache/juanos/snow-src" checkout "$SNOW_COMMIT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/juanos/snow-src/target
+          key: snow-${{ env.SNOW_COMMIT }}-${{ hashFiles('tools/snowrun/main.rs') }}
+      - name: Build the test runner
+        run: make tools
+      - name: Tests in the emulator
+        run: |
+          # the settings built into the kernel are not rebuilt when only the
+          # test changes: touch them between one test and the next
+          for t in test test-hdboot test-crash test-scsi test-net test-tcp test-ssh \
+                   test-disk test-desk test-wifi test-term test-ownkey; do
+            echo "::group::$t"
+            touch kernel/cfgdata.S
+            make "$t"
+            echo "::endgroup::"
+          done
