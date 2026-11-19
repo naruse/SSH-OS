@@ -1,8 +1,8 @@
 # SSH OS settings. Copy this file to config.txt and edit it; "make" then
 # builds it into the boot disk. Lines starting with # are ignored.
 #
-# config.txt holds secrets (the helper's password and the Home Assistant
-# token). Keep it out of anything you share or publish.
+# config.txt holds secrets (an SSH key, the helper's password). Keep it out
+# of anything you share or publish.
 
 # Network: "dhcp", or four numbers: ADDRESS MASK GATEWAY NAMESERVER
 network = dhcp
@@ -25,13 +25,8 @@ network = dhcp
 helper = 192.168.1.10:2323
 secret = change-this-secret
 
-# Home Assistant: address and port (plain http), and a long-lived access
-# token (your profile page in Home Assistant, under Security).
-ha = 192.168.1.5:8123
-ha_token =
-
 # What to run at start-up: desk (the home screen, also when this line is
-# missing), shell, ssh, term or home
+# missing), shell, ssh or term
 start = desk
 
 # Option types accented letters as on a Mac (Option-e then a vowel, Option-n

@@ -16,8 +16,6 @@ void shell_read_line(char *line);               /* a typed line, at most 79 char
 /* term.c */
 void cmd_term(int argc, char **argv);
 
-/* home.c */
-void cmd_home(int argc, char **argv);
 
 /* cmd_tcp.c */
 void cmd_tcp(int argc, char **argv);

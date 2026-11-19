@@ -6,8 +6,9 @@
  *
  * The pointer is drawn from the 60 Hz interrupt so it keeps moving while
  * the program is busy (waiting for the network, say). Anything else that
- * draws must bracket its work with gfx_begin() / gfx_end(), which take the
- * pointer off the screen and put it back.
+ * draws must bracket its work with gfx_begin() / gfx_end(): between them
+ * the pointer stays where it is, and is taken off the screen only if
+ * something is drawn where it lies; gfx_end() puts it back.
  */
 #include "kernel.h"
 #include "hw.h"
@@ -16,9 +17,12 @@ extern const unsigned char font6x10[224][10];
 
 static u8 *fb;
 
+static void ptr_prepare(void);
+
 void gfx_init(u8 *screen)
 {
     fb = screen;
+    ptr_prepare();
 }
 
 /* The byte a pattern puts in screen row y. */
@@ -33,6 +37,8 @@ static u8 pattern_byte(int pattern, int y)
     return 0x00;
 }
 
+static void ptr_clear_of(int x, int y, int w, int h);
+
 void gfx_fill(int x, int y, int w, int h, int pattern)
 {
     int x1 = x + w, y1 = y + h, first, last, n;
@@ -45,6 +51,7 @@ void gfx_fill(int x, int y, int w, int h, int pattern)
     if (y1 > SCREEN_H) y1 = SCREEN_H;
     if (x >= x1 || y >= y1)
         return;
+    ptr_clear_of(x, y, x1 - x, y1 - y);
     first = x >> 3;
     last = (x1 - 1) >> 3;
     lmask = (u8)(0xFF >> (x & 7));
@@ -137,6 +144,7 @@ static void put_bits(int x, int y, u16 bits, int width, int white)
         bits = (u16)(bits << -x);
         x = 0;
     }
+    ptr_clear_of(x, y, 16, 1);
     shift = x & 7;
     wide = ((u32)bits << 8) >> shift;       /* 24 bits across three bytes */
     p = fb + (u32)y * SCREEN_ROWBYTES + (x >> 3);
@@ -261,41 +269,106 @@ static struct {
     u8 saved[PTR_H][3];         /* the screen underneath */
 } ptr;
 
+/* Both of these run in the 60 Hz interrupt, which comes as the screen's
+ * blanking starts: taking the pointer off and putting it back must be over
+ * before the picture is next sent out (about a thousandth of a second), or
+ * a frame goes out without it and it flickers. Hence the plain code. */
 static void ptr_erase(void)
 {
-    int row, i, bx = ptr.x >> 3;
+    int rows, n = SCREEN_ROWBYTES - (ptr.x >> 3);
+    const u8 *s = ptr.saved[0];
     u8 *p;
 
     if (!ptr.drawn)
         return;
-    for (row = 0; row < PTR_H && ptr.y + row < SCREEN_H; row++) {
-        p = fb + (u32)(ptr.y + row) * SCREEN_ROWBYTES + bx;
-        for (i = 0; i < 3 && bx + i < SCREEN_ROWBYTES; i++)
-            p[i] = ptr.saved[row][i];
-    }
     ptr.drawn = 0;
+    rows = SCREEN_H - ptr.y;
+    if (rows > PTR_H)
+        rows = PTR_H;
+    p = fb + (u32)ptr.y * SCREEN_ROWBYTES + (ptr.x >> 3);
+    if (n >= 3) {
+        for (; rows > 0; rows--, s += 3, p += SCREEN_ROWBYTES) {
+            p[0] = s[0];
+            p[1] = s[1];
+            p[2] = s[2];
+        }
+    } else {
+        for (; rows > 0; rows--, s += 3, p += SCREEN_ROWBYTES) {
+            p[0] = s[0];
+            if (n > 1)
+                p[1] = s[1];
+        }
+    }
+}
+
+/* The arrow at each of the eight places it can have within a byte, worked
+ * out once: for every row three bytes to keep (a mask) and three of ink. */
+static u8 ptr_table[8][PTR_H][6];
+
+static void ptr_prepare(void)
+{
+    int shift, row, i;
+    u32 shape, ink;
+
+    for (shift = 0; shift < 8; shift++)
+        for (row = 0; row < PTR_H; row++) {
+            shape = ((u32)ptr_shape[row] << 8) >> shift;
+            ink = ((u32)ptr_ink[row] << 8) >> shift;
+            for (i = 0; i < 3; i++) {
+                ptr_table[shift][row][2 * i] = (u8)~(shape >> (16 - 8 * i));
+                ptr_table[shift][row][2 * i + 1] = (u8)(ink >> (16 - 8 * i));
+            }
+        }
 }
 
 static void ptr_draw(void)
 {
-    int row, i, bx, shift;
-    u32 shape, ink;
+    int rows, n;
+    const u8 *t;
+    u8 *s = ptr.saved[0];
     u8 *p;
+    u8 v;
 
     ptr.x = mouse.x;
     ptr.y = mouse.y;
-    bx = ptr.x >> 3;
-    shift = ptr.x & 7;
-    for (row = 0; row < PTR_H && ptr.y + row < SCREEN_H; row++) {
-        p = fb + (u32)(ptr.y + row) * SCREEN_ROWBYTES + bx;
-        shape = ((u32)ptr_shape[row] << 8) >> shift;
-        ink = ((u32)ptr_ink[row] << 8) >> shift;
-        for (i = 0; i < 3 && bx + i < SCREEN_ROWBYTES; i++) {
-            ptr.saved[row][i] = p[i];
-            p[i] = (u8)((p[i] & ~(u8)(shape >> (16 - 8 * i))) | (u8)(ink >> (16 - 8 * i)));
+    t = ptr_table[ptr.x & 7][0];
+    n = SCREEN_ROWBYTES - (ptr.x >> 3);
+    rows = SCREEN_H - ptr.y;
+    if (rows > PTR_H)
+        rows = PTR_H;
+    p = fb + (u32)ptr.y * SCREEN_ROWBYTES + (ptr.x >> 3);
+    if (n >= 3) {
+        for (; rows > 0; rows--, p += SCREEN_ROWBYTES - 2) {
+            v = *p; *s++ = v; *p++ = (u8)((v & t[0]) | t[1]);
+            v = *p; *s++ = v; *p++ = (u8)((v & t[2]) | t[3]);
+            v = *p; *s++ = v; *p = (u8)((v & t[4]) | t[5]);
+            t += 6;
+        }
+    } else {
+        for (; rows > 0; rows--, p += SCREEN_ROWBYTES, s += 3, t += 6) {
+            s[0] = p[0];
+            p[0] = (u8)((p[0] & t[0]) | t[1]);
+            if (n > 1) {
+                s[1] = p[1];
+                p[1] = (u8)((p[1] & t[2]) | t[3]);
+            }
         }
     }
     ptr.drawn = 1;
+}
+
+/* Something is about to be drawn in this rectangle (or read from it): if
+ * the pointer lies there, take it off first. Only between gfx_begin() and
+ * gfx_end(), when the interrupt leaves the pointer alone. */
+static void ptr_clear_of(int x, int y, int w, int h)
+{
+    int px;
+
+    if (!ptr.drawn || !ptr.held)
+        return;
+    px = ptr.x & ~7;            /* it is saved and restored in whole bytes */
+    if (x < px + 24 && x + w > px && y < ptr.y + PTR_H && y + h > ptr.y)
+        ptr_erase();
 }
 
 /* Called from the 60 Hz interrupt. */
@@ -311,30 +384,38 @@ void gfx_pointer_tick(void)
 
 void gfx_pointer(int on)
 {
-    cpu_irq_disable();
+    u32 was;
+
+    was = cpu_irq_save();
     ptr.wanted = (u8)(on != 0);
     if (!on)
         ptr_erase();
     else if (!ptr.held && !ptr.drawn && !ptr.parked)    /* parked: the next tick after idle draws it */
         ptr_draw();
-    cpu_irq_enable();
+    cpu_irq_restore(was);
 }
 
 /* Around any drawing while the pointer is on. Calls may be nested. */
 void gfx_begin(void)
 {
-    cpu_irq_disable();
+    u32 was;
+
+    was = cpu_irq_save();
     ptr.held++;
-    ptr_erase();
-    cpu_irq_enable();
+    cpu_irq_restore(was);
 }
 
 void gfx_end(void)
 {
-    cpu_irq_disable();
-    if (ptr.held && --ptr.held == 0 && ptr.wanted && !ptr.parked)
+    u32 was;
+
+    was = cpu_irq_save();
+    if (ptr.held && --ptr.held == 0 && ptr.wanted && !ptr.parked &&
+        !(ptr.drawn && ptr.x == mouse.x && ptr.y == mouse.y)) {
+        ptr_erase();
         ptr_draw();
-    cpu_irq_enable();
+    }
+    cpu_irq_restore(was);
 }
 
 /* For the text screen, which draws a character at a time: take the pointer
@@ -342,12 +423,14 @@ void gfx_end(void)
  * when the program next has nothing to do (bar_idle). */
 void gfx_pointer_park(void)
 {
+    u32 was;
+
     if (ptr.parked)
         return;
-    cpu_irq_disable();
+    was = cpu_irq_save();
     ptr.parked = 1;
     ptr_erase();
-    cpu_irq_enable();
+    cpu_irq_restore(was);
 }
 
 void gfx_pointer_unpark(void)
@@ -372,6 +455,7 @@ void gfx_save(int x, int y, int w, int h)
     kept_h = y + h > SCREEN_H ? SCREEN_H - y : h;
     while (kept_w * kept_h > (int)sizeof kept)
         kept_h--;
+    ptr_clear_of(kept_x * 8, kept_y, kept_w * 8, kept_h);
     for (row = 0; row < kept_h; row++)
         memcpy(kept + row * kept_w, fb + (u32)(kept_y + row) * SCREEN_ROWBYTES + kept_x,
                (size_t)kept_w);
@@ -381,6 +465,7 @@ void gfx_restore(void)
 {
     int row;
 
+    ptr_clear_of(kept_x * 8, kept_y, kept_w * 8, kept_h);
     for (row = 0; row < kept_h; row++)
         memcpy(fb + (u32)(kept_y + row) * SCREEN_ROWBYTES + kept_x, kept + row * kept_w,
                (size_t)kept_w);

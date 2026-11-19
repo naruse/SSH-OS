@@ -28,6 +28,8 @@ extern char __kernel_start[], __kernel_end[], __bss_start[], __bss_end[];
 void cpu_halt(void) __attribute__((noreturn));
 void cpu_irq_enable(void);      /* let interrupts in */
 void cpu_irq_disable(void);
+u32  cpu_irq_save(void);        /* mask them; returns the state to give cpu_irq_restore */
+void cpu_irq_restore(u32 was);
 void cpu_idle(void);            /* sleep until the next interrupt */
 extern char irq_level1[];       /* VIA interrupt entry */
 
@@ -130,8 +132,6 @@ void wifi_refresh(void);                /* ask the adapter again */
 #define BAR_VOL_X    318        /* "Vol 5", */
 #define BAR_VOL_MORE 352        /* and a + button */
 #define BAR_VOL_BTN  13         /* each is this wide and high */
-#define BAR_MEM_X    66         /* "Mem", its gauge and figure: a click shows what uses it */
-#define BAR_MEM_END  188
 #define BAR_H        20
 #define BAR_TITLE_W  58         /* the SSH OS menu title, at its left */
 #define BAR_NET_X    380        /* the network icon and address */
@@ -148,10 +148,6 @@ void ip_text(char *out, u32 ip);                /* a.b.c.d */
 #define BAR_HOME    2           /* the menu's Home: go to the home screen */
 #define BAR_CONSOLE 3           /* the menu's OSConsole: go to the command line */
 int  bar_poll(void);
-void bar_memory(void);          /* the panel of what uses the memory */
-struct mem_part { const char *name; unsigned long bytes; };
-extern const struct mem_part mem_parts[];   /* largest first (tools/mkmem.py) */
-extern const int mem_nparts;
 int  bar_menu(void);            /* open the SSH OS menu; returns as bar_poll */
 void bar_panel(void);           /* open the network panel */
 /* ask.c: SSH's questions, each in a small window. */
@@ -159,6 +155,9 @@ int  ask_password(const char *user, const char *host, char *line, int max);  /* 
 int  ask_trust(const char *host, const char *print);                         /* 1 = trust it */
 void ask_message(const char *title, const char *const *lines, int n);         /* with an OK button */
 int  connect_run(char *target);     /* connect.c: SSH from the home screen; 1 = never got in */
+enum { KNOCK_ANSWERS, KNOCK_NO_ANSWER, KNOCK_NO_SSH, KNOCK_NO_NAME, KNOCK_NO_NETWORK };
+int  connect_knock(const char *target, u32 *ms);    /* is the server there? one of KNOCK_ */
+void connect_knock_text(int result, u32 ms, char *out);     /* that, in words (48 bytes) */
 extern void (*ssh_login_hook)(void);            /* ssh.c: called once logged in, */
 extern void (*ssh_end_hook)(void);              /* and when the session is over */
 extern u8 ssh_ended_well;                       /* the last session ended with nothing to report */
@@ -235,11 +234,6 @@ void gfx_pointer_park(void);    /* off the screen until gfx_pointer_unpark; chea
 void gfx_pointer_unpark(void);
 void gfx_save(int x, int y, int w, int h);      /* keep that part of the screen... */
 void gfx_restore(void);                         /* ...and put it back */
-
-/* http.c */
-int http_request(const char *method, u32 ip, u16 port, const char *host, const char *path,
-                 const char *token, const char *body, char *out, u32 out_max, u32 *out_len,
-                 int *status);
 
 /* serial.c: modem port, polled */
 void serial_init(u32 baud);

@@ -41,7 +41,7 @@ KFLAGS ?=
 CONFIG ?= $(if $(wildcard config.txt),config.txt,config.example.txt)
 # The tests that type commands need a disk that starts in the OSConsole, not in
 # the home screen, whatever your own settings say.
-ifneq ($(filter test test-hdboot test-scsi test-net test-tcp test-term test-home bench test-all,$(MAKECMDGOALS)),)
+ifneq ($(filter test test-hdboot test-scsi test-net test-tcp test-term bench test-all,$(MAKECMDGOALS)),)
 CONFIG := tests/config-prompt.txt
 endif
 
@@ -54,7 +54,7 @@ ASFLAGS := -m68000 -Wa,--register-prefix-optional
 
 KOBJS := $(addprefix $(B)/, start.o kmain.o machine.o console.o serial.o \
            kprintf.o trap.o via.o adb.o kbd.o timer.o scsi.o dayna.o net.o tcp.o \
-           config.o cfgdata.o sha256.o term.o gfx.o http.o home.o shell.o \
+           config.o cfgdata.o sha256.o term.o gfx.o shell.o \
            cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o rng.o ssh.o bench.o lib.o \
            desk.o bar.o barmenu.o snd.o wifi.o hwtest.o fs.o saved.o ask.o connect.o vt.o splash.o settings.o banner.o icons.o font6x10.o)
 
@@ -95,19 +95,10 @@ $(B)/cfgdata.o: kernel/cfgdata.S $(B)/config.txt
 
 # start.o must be first so _start is the first byte of the image. libgcc
 # supplies 32-bit multiply and divide, which the 68000 lacks.
-#
-# memtab.o is the table behind "Mem" on the bar: how much each part of the
-# system takes, added up from the other object files.
-$(B)/memtab.c: $(KOBJS) tools/mkmem.py
-	python3 tools/mkmem.py $(CROSS)size $@ $(KOBJS)
-
-$(B)/memtab.o: $(B)/memtab.c
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-$(B)/kernel.elf: $(KOBJS) $(B)/memtab.o kernel/kernel.ld
+$(B)/kernel.elf: $(KOBJS) kernel/kernel.ld
 	$(CC) -m68000 -nostdlib -Wl,-T,kernel/kernel.ld \
 		-Wl,--defsym,KERNEL_ADDR=$(KERNEL_ADDR) -Wl,-Map,$(B)/kernel.map -Wl,--no-warn-rwx-segments \
-		-o $@ $(KOBJS) $(B)/memtab.o -lgcc
+		-o $@ $(KOBJS) -lgcc
 
 $(B)/kernel.bin: $(B)/kernel.elf
 	$(OBJCOPY) -O binary $< $@
@@ -115,7 +106,7 @@ $(B)/kernel.bin: $(B)/kernel.elf
 # ------------------------------------------------------------ boot block --
 # The name in big letters: for the loader, and the same pixels as a C table
 # for the kernel's start-up picture.
-$(B)/banner.inc $(B)/banner.c: tools/mkbanner.py | $(B)
+$(B)/banner.inc $(B)/banner.c: tools/mkbanner.py fonts/icons.txt | $(B)
 	python3 tools/mkbanner.py $(B)/banner.inc $(B)/banner.c
 
 $(B)/banner.o: $(B)/banner.c
@@ -268,26 +259,6 @@ test-term: $(B)/sshos-800k.dsk
 	@grep -q 'Terminal ended: closed from the keyboard' $(B)/test-term.serial.txt
 	@echo "Terminal test passed."
 
-# The Home Assistant panel against a stand-in server (tools/mockha.py).
-# Keys and the mouse work the panel; the stand-in's log shows what it was
-# asked to do.
-test-home: $(B)/sshos-800k.dsk
-	@python3 tools/mockha.py --log $(B)/mockha.log & pid=$$!; \
-	trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
-	"$(JUANRUN)" --rom "$(ROM)" --floppy $(B)/sshos-800k.dsk --net 4 \
-		--until SSHOS-BOOT-OK --cycles 900000000 --prompt '> ' --prompt 'HOME: Click' \
-		--type '$(TEST_NET)set ha 127.0.0.1:8123\nset ha_token test-token\nhome\n\p\sn\p\sp\p \p\>+\p\c\p\M(-150,-91)\c\p\p\sq\puptime\n' \
-		--done 'stray interrupts' --out $(B)/test-home
-	@echo "--- what the stand-in was asked ---"; cat $(B)/mockha.log
-	@echo "--- the panel's notes ---"; grep '^HOME' $(B)/test-home.serial.txt
-	@grep -q 'template devices 12 to 24 of 15' $(B)/mockha.log
-	@grep -q 'toggle light.living_room -> off' $(B)/mockha.log
-	@grep -q 'turn_on light.kitchen 26' $(B)/mockha.log
-	@grep -q 'toggle switch.fan -> off' $(B)/mockha.log
-	@grep -q 'turn_on light.living_room 126' $(B)/mockha.log
-	@grep -q 'stray interrupts' $(B)/test-home.serial.txt
-	@echo "Home panel test passed."
-
 # The helper on its own: screen model, update encoder, and a session with a
 # pretend SE.
 test-helper:
@@ -341,7 +312,7 @@ test-ssh-host: $(B)/font6x10.c | $(B)
 		$(addprefix kernel/, sha256.c config.c x25519.c sha512.c poly1305.c ed25519.c ssh.c saved.c vt.c)
 	python3 -m unittest tests.test_ssh
 
-test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-term test-home test-autostart \
+test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-term \
           test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-helper
 
 run: $(B)/sshos-800k.dsk
@@ -364,11 +335,10 @@ demo:
 	trap "kill $$server 2>/dev/null" EXIT; \
 	"$(SNOW_APP)" build-demo/demo.snoww > build-demo/snow.log 2>&1
 
-# The older way, through a helper program on this Mac: "term" and "home".
-# Everything needed to try "term" and "home" in the Snow window: a disk built
-# with config.demo.txt, the terminal helper with your own shell, and the
-# stand-in Home Assistant. Both listen on this Mac only and stop when Snow is
-# closed. tools/demo.snoww is a Snow workspace that attaches the network
+# The older way, through a helper program on this Mac: "term".
+# Everything needed to try "term" in the Snow window: a disk built with
+# config.demo.txt and the terminal helper with your own shell. It listens on
+# this Mac only and stops when Snow is closed. tools/demo.snoww is a Snow workspace that attaches the network
 # adapter at SCSI ID 4 and sets the mouse to hardware emulation, so nothing
 # has to be clicked in Snow's menus. It is copied next to the disk because
 # its paths are relative to where it sits.
@@ -376,10 +346,9 @@ demo-helper:
 	$(MAKE) B=build-demo CONFIG=config.demo.txt build-demo/sshos-800k.dsk
 	cp tools/demo.snoww build-demo/demo.snoww
 	@test -f build-demo/disk.img || python3 tools/sshosdisk.py make build-demo/disk.img 16
-	@python3 tools/mockha.py --log build-demo/mockha.log & ha=$$!; \
-	JUANTERM_SECRET=emulator-demo-secret python3 -m tools.juanterm.server \
+	@JUANTERM_SECRET=emulator-demo-secret python3 -m tools.juanterm.server \
 		--listen 127.0.0.1 --port 2323 > build-demo/juanterm.log 2>&1 & helper=$$!; \
-	trap "kill $$ha $$helper 2>/dev/null" EXIT; \
+	trap "kill $$helper 2>/dev/null" EXIT; \
 	"$(SNOW_APP)" build-demo/demo.snoww > build-demo/snow.log 2>&1
 
 # The SSH client in the emulated SE, logging in to an OpenSSH server on this
@@ -496,20 +465,6 @@ test-disk:
 	@python3 tools/sshosdisk.py get build-disk/disk.img RECENT.TXT | grep -q '@127.0.0.1:22026$$'
 	@echo "SSH OS disk test passed."
 
-# A disk whose settings say "start = home": it must bring the network up and
-# open the panel by itself.
-test-autostart:
-	$(MAKE) B=build-auto CONFIG=tests/config-autostart.txt build-auto/sshos-800k.dsk
-	@python3 tools/mockha.py --log build-auto/mockha.log & pid=$$!; \
-	trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
-	"$(JUANRUN)" --rom "$(ROM)" --floppy build-auto/sshos-800k.dsk --net 4 \
-		--until SSHOS-BOOT-OK --cycles 600000000 \
-		--type '\p\p\p\p\p\sq\puptime\n' --done 'stray interrupts' --out build-auto/test
-	@grep '^HOME' build-auto/test.serial.txt
-	@grep -q 'template devices 0 to 12 of 15' build-auto/mockha.log
-	@grep -q 'HOME: Click a tile' build-auto/test.serial.txt
-	@echo "Start-up test passed."
-
 tools:
 	mkdir -p "$(SNOW_SRC)/testrunner/src/bin/juanrun"
 	cp tools/snowrun/main.rs "$(SNOW_SRC)/testrunner/src/bin/juanrun/main.rs"
@@ -523,7 +478,7 @@ disasm: $(B)/kernel.elf
 clean:
 	rm -rf build build-crash build-auto build-demo
 
-.PHONY: all test test-crash test-scsi test-net test-tcp test-term test-home test-helper demo demo-helper test-ssh test-desk test-autostart \
+.PHONY: all test test-crash test-scsi test-net test-tcp test-term test-helper demo demo-helper test-ssh test-desk \
         test-net-host test-misc-host test-crypto-host test-ssh-host bench test-all run tools \
         test-disk test-fs-host test-wifi \
         disasm clean

@@ -11,7 +11,7 @@
 
 #define ENTRIES     16
 #define NAME_MAX    16
-#define VALUE_MAX   256        /* a Home Assistant token is about 180 characters */
+#define VALUE_MAX   256        /* room for a long value, such as a key */
 
 extern const char config_text[];
 extern const u32 config_text_len;

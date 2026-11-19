@@ -10,12 +10,14 @@
 #include "kernel.h"
 #include "hw.h"
 #include "shell.h"
+#include "net.h"
 
 #define BAR_W       240
 #define BAR_X       ((SCREEN_W - BAR_W) / 2)
 #define BAR_Y       (BAR_H + 104)
-#define LABEL_Y     (BAR_Y + 22)
-#define MORE_Y      (LABEL_Y + 22)
+#define REACH_Y     (BAR_Y + 22)        /* "Server answers in 9 ms", once known */
+#define LABEL_Y     (REACH_Y + 18)
+#define MORE_Y      (LABEL_Y + 18)
 #define MORE_MAX    5
 #define LINE_LEN    86
 #define STAGES      6
@@ -30,6 +32,7 @@ static char label[LINE_LEN], more[MORE_MAX][LINE_LEN], cur[LINE_LEN];
 static int nmore, cur_len, stage, dots;
 static u8 quiet;                /* collect the lines but draw nothing */
 static u8 logged_in;
+static const u16 dot[8] = {0x3C00, 0x7E00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0x7E00, 0x3C00};
 
 static void centered(int y, const char *s, int bold)
 {
@@ -65,6 +68,80 @@ static int begins(const char *s, const char *with)
     u32 n = strlen(with);
 
     return strlen(s) >= n && memcmp(s, with, n) == 0;
+}
+
+/* Is anyone there? A connection to the server's SSH port, dropped as soon
+ * as it is answered: quick, and it says the machine is up, the way to it is
+ * open and something listens for SSH. target is "user@host[:port]".
+ * Returns one of KNOCK_; *ms is how long the answer took. Esc gives up. */
+int connect_knock(const char *target, u32 *ms)
+{
+    char host[64];
+    const char *s = target, *p;
+    u32 ip, port = 0, started;
+    int n = 0, c, r = KNOCK_NO_ANSWER;
+
+    for (p = s; *p; p++)
+        if (*p == '@')
+            s = p + 1;
+    while (*s && *s != ':' && n < (int)sizeof host - 1)
+        host[n++] = *s++;
+    host[n] = 0;
+    if (*s == ':')
+        for (s++; *s >= '0' && *s <= '9'; s++)
+            port = port * 10 + (u32)(*s - '0');
+    *ms = 0;
+    if (!n)
+        return KNOCK_NO_NAME;
+    if (!(net.up && net.ip) && shell_network_start() != 0)
+        return KNOCK_NO_NETWORK;
+    if (net_resolve(host, &ip) != 0)
+        return KNOCK_NO_NAME;
+    c = tcp_open(ip, (u16)(port ? port : 22));
+    if (c < 0)
+        return KNOCK_NO_ANSWER;
+    started = ticks;
+    kbd_escape = 0;
+    while (ticks - started < 4 * 60 && !kbd_escape) {
+        net_poll();
+        if (!tcp_connecting(c)) {
+            r = tcp_is_open(c) ? KNOCK_ANSWERS : KNOCK_NO_SSH;
+            break;
+        }
+        bar_tick();
+        bar_idle();
+    }
+    *ms = (ticks - started) * 1000 / 60;
+    if (!*ms)
+        *ms = 1;
+    tcp_abort(c);
+    kbd_escape = 0;
+    return r;
+}
+
+/* What a knock found, in words; out needs 48 bytes. */
+void connect_knock_text(int result, u32 ms, char *out)
+{
+    static const char *const said[] = {
+        "", "No answer", "It answers, but SSH is not listening", "No machine of that name",
+        "No network",
+    };
+    char num[8];
+    int n = 0;
+
+    if (result != KNOCK_ANSWERS) {
+        memcpy(out, said[result], strlen(said[result]) + 1);
+        return;
+    }
+    do {
+        num[n++] = (char)('0' + ms % 10);
+        ms /= 10;
+    } while (ms && n < 6);
+    memcpy(out, "Answers in ", 11);
+    out += 11;
+    while (n)
+        *out++ = num[--n];
+    memcpy(out, " ms, SSH is listening", 22);
 }
 
 /* A whole line has arrived. */
@@ -161,9 +238,10 @@ static void at_end(void)
 int connect_run(char *target)
 {
     static const char *lines[MORE_MAX + 1];
+    static char reach[48];
     char title[LINE_LEN];
     char *argv[2];
-    u32 n = strlen(target);
+    u32 n = strlen(target), ms;
     int i, count = 0;
 
     argv[0] = "ssh";
@@ -187,6 +265,27 @@ int connect_run(char *target)
     gfx_end();
 
     serial_puts("DESK: connecting\n");
+    /* Knock first: the steps that follow take this machine a minute, and
+     * there is no point starting them for a server that is not there. */
+    memcpy(label, "Reaching the server", 20);
+    draw_text();
+    i = connect_knock(target, &ms);
+    connect_knock_text(i, ms, reach);
+    if (i != KNOCK_ANSWERS) {
+        gfx_begin();
+        gfx_fill(0, REACH_Y, SCREEN_W, MORE_Y + MORE_MAX * 14 - REACH_Y, GFX_WHITE);
+        gfx_end();
+        lines[0] = reach;
+        ask_message("Could not connect", lines, 1);
+        return 1;
+    }
+    label[0] = 0;
+    draw_text();
+    gfx_begin();
+    reach[strlen(reach) - 18] = 0;              /* just "Answers in 9 ms" */
+    gfx_picture((SCREEN_W - gfx_text_width(reach, 1)) / 2 - 14, REACH_Y + 1, dot, 8, 0, 1);
+    centered(REACH_Y, reach, 0);
+    gfx_end();
     ssh_login_hook = at_login;
     ssh_end_hook = at_end;
     kputc_divert(take);
@@ -212,7 +311,7 @@ int connect_run(char *target)
     }
     if (!logged_in) {           /* the window says it now */
         gfx_begin();
-        gfx_fill(0, LABEL_Y, SCREEN_W, MORE_Y + MORE_MAX * 14 - LABEL_Y, GFX_WHITE);
+        gfx_fill(0, REACH_Y, SCREEN_W, MORE_Y + MORE_MAX * 14 - REACH_Y, GFX_WHITE);
         gfx_end();
     }
     ask_message(logged_in ? "Connection ended" : "Could not connect", lines, count);

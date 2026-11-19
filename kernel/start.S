@@ -34,6 +34,18 @@ cpu_irq_enable:
 cpu_irq_disable:
         move.w  #0x2700,sr
         rts
+| cpu_irq_save: mask interrupts and return what the status register was;
+| cpu_irq_restore puts that back. For code that may run before interrupts
+| are let in at all, and must not let them in itself.
+        .globl  cpu_irq_save, cpu_irq_restore
+cpu_irq_save:
+        moveq   #0,d0
+        move.w  sr,d0
+        move.w  #0x2700,sr
+        rts
+cpu_irq_restore:
+        move.w  6(sp),sr
+        rts
 | Sleep until an interrupt arrives, then return (the handler runs first).
 cpu_idle:
         stop    #0x2000

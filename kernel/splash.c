@@ -2,9 +2,9 @@
  * pictures that fills in from the left as each part of the system comes up.
  * While it shows, what the kernel prints goes to the serial port only.
  *
- * The loader (boot/boot.S) has already drawn the name on a white screen, in
- * the same place and from the same pixels (tools/mkbanner.py), so nothing
- * jumps when the kernel takes over.
+ * The loader (boot/boot.S) has already drawn the name on a white screen, and
+ * from a hard disk the mark as well, in the same places and from the same
+ * pixels (tools/mkbanner.py), so nothing jumps when the kernel takes over.
  */
 #include "kernel.h"
 #include "hw.h"
@@ -26,6 +26,11 @@ extern const unsigned char banner_name[8][24];
 
 static const char by[] = "by:", who[] = SSHOS_AUTHOR, where[] = SSHOS_SOURCE;
 static int shown;
+static u32 last_at;             /* tick at which the last small picture appeared */
+
+/* The small pictures come up a fifth of a second apart, five of them in a
+ * second, however quickly the parts themselves start. */
+#define PACE 12
 static u8 up;
 
 static void swallow(char c)
@@ -38,7 +43,14 @@ void splash_start(void)
     u8 *p;
     int r, k;
 
-    gfx_fill(0, 0, SCREEN_W, SCREEN_H, GFX_WHITE);
+    /* The loader left a white screen with the name on it, and from a hard
+     * disk all the rest of this picture too (told by the line at the foot):
+     * then nothing is wiped, so that nothing blinks. Drawing it again over
+     * itself changes nothing. */
+    if (machine.screen[FOOT_Y * SCREEN_ROWBYTES] != 0xFF) {
+        gfx_fill(0, 0, SCREEN_W, LOGO_Y, GFX_WHITE);
+        gfx_fill(0, NAME_Y + 8 * NAME_VSCALE, SCREEN_W, SCREEN_H - NAME_Y - 8 * NAME_VSCALE, GFX_WHITE);
+    }
     gfx_icon((SCREEN_W - 96) / 2, LOGO_Y, &icon_logo, 0);
     p = machine.screen + NAME_Y * SCREEN_ROWBYTES + NAME_XB;
     for (r = 0; r < 8; r++)
@@ -58,14 +70,22 @@ void splash_step(const struct icon *icon)
 {
     if (!up)
         return;
+    while (shown && ticks - last_at < PACE)
+        cpu_idle();
+    last_at = ticks;
     gfx_icon((SCREEN_W - ((ROW_COUNT - 1) * ROW_STEP + 24)) / 2 + shown * ROW_STEP, ROW_Y, icon, 0);
     shown++;
 }
 
 void splash_end(void)
 {
+    u32 until;
+
     if (!up)
         return;
+    /* And as long again for the last one to be seen. */
+    for (until = last_at + PACE; (s32)(ticks - until) < 0;)
+        cpu_idle();
     up = 0;
     kputc_divert(NULL);
 }

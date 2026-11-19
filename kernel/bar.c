@@ -78,19 +78,38 @@ void ip_text(char *out, u32 ip)
     out[n] = 0;
 }
 
-/* A gauge in white on the black bar: an outline with part of it filled. */
+/* A gauge in white on the black bar: an outline with part of it filled.
+ * Every pixel of it is set once, so one drawn over another does not blink. */
 static void gauge(int x, u32 part, u32 whole)
 {
-    u32 w = whole ? part * 46 / whole : 0;
+    int w = (int)(whole ? part * 46 / whole : 0);
 
-    gfx_fill(x, 6, 50, 8, GFX_WHITE);
-    gfx_fill(x + 1, 7, 48, 6, GFX_BLACK);
-    gfx_fill(x + 2, 8, (int)(w > 46 ? 46 : w), 4, GFX_WHITE);
+    if (w > 46)
+        w = 46;
+    gfx_fill(x, 6, 50, 1, GFX_WHITE);
+    gfx_fill(x, 13, 50, 1, GFX_WHITE);
+    gfx_fill(x, 7, 1, 6, GFX_WHITE);
+    gfx_fill(x + 49, 7, 1, 6, GFX_WHITE);
+    gfx_fill(x + 1, 7, 48, 1, GFX_BLACK);
+    gfx_fill(x + 1, 12, 48, 1, GFX_BLACK);
+    gfx_fill(x + 1, 8, 1, 4, GFX_BLACK);
+    gfx_fill(x + 48, 8, 1, 4, GFX_BLACK);
+    gfx_fill(x + 2, 8, w, 4, GFX_WHITE);
+    gfx_fill(x + 2 + w, 8, 46 - w, 4, GFX_BLACK);
 }
 
 static void text(int x, const char *s)
 {
     gfx_text(x, 5, s, 1, 1, 0);
+}
+
+/* A dotted line under something in the bar that opens when clicked. */
+static void dotted(int x, int w, int color)
+{
+    int i;
+
+    for (i = 0; i < w; i += 2)
+        gfx_fill(x + i, 15, 1, 1, color);
 }
 
 /* A small outlined button in the bar, holding a minus or a plus. */
@@ -103,38 +122,56 @@ static void button(int x, int plus)
         gfx_fill(x + 6, 6, 1, 7, GFX_WHITE);
 }
 
+/* What the bar shows now, so that only what has changed is drawn again:
+ * drawing all of it every second made it blink. */
+static struct {
+    u8 all;                     /* nothing can be trusted: draw everything */
+    u8 vol, net_open;
+    u32 load, minute;
+    const struct icon *fan;
+    char net[12];
+} shown;
+
 static void draw_figures(u32 load)
 {
     static const struct icon *const fans[4] = {&icon_wifi1, &icon_wifi2, &icon_wifi3, &icon_wifi4};
     u32 used = (u32)(__bss_end - __kernel_start) / 1024, total = machine.mem_top / 1024;
-    u32 secs = machine.rom_time + ticks * 100 / 6015;
+    u32 minute = (machine.rom_time + ticks * 100 / 6015) / 60;
+    const struct icon *fan;
     char s[20];
-    int up = net.up && net.ip;
+    int up = net.up && net.ip, all = shown.all, vol = snd_volume();
 
     gfx_begin();
-    gfx_fill(BAR_TITLE_W, 0, BAR_NET_X - BAR_TITLE_W, BAR_H, GFX_BLACK);
-    text(70, "Mem");
-    gauge(92, used, total);
-    put_num(s, used, 3);
-    memcpy(s + 3, "K", 2);
-    text(146, s[0] == '0' ? s + 1 : s);
-    text(196, "CPU");
-    gauge(218, load, 100);
-    put_num(s, load, 3);
-    memcpy(s + 3, "%", 2);
-    text(272, s + (load < 10 ? 2 : load < 100 ? 1 : 0));
-
-    memcpy(s, "Vol ", 4);
-    s[4] = (char)('0' + snd_volume());
-    s[5] = 0;
-    text(BAR_VOL_X, s);
-    button(BAR_VOL_LESS, 0);
-    button(BAR_VOL_MORE, 1);
+    if (all) {
+        gfx_fill(BAR_TITLE_W, 0, BAR_NET_X - BAR_TITLE_W, BAR_H, GFX_BLACK);
+        text(70, "Mem");
+        gauge(92, used, total);
+        put_num(s, used, 3);
+        memcpy(s + 3, "K", 2);
+        text(146, s[0] == '0' ? s + 1 : s);
+        text(196, "CPU");
+        button(BAR_VOL_LESS, 0);
+        button(BAR_VOL_MORE, 1);
+    }
+    if (all || load != shown.load) {
+        gauge(218, load, 100);
+        put_num(s, load, 3);
+        memcpy(s + 3, "%", 2);
+        gfx_fill(272, 5, 24, 10, GFX_BLACK);
+        text(272, s + (load < 10 ? 2 : load < 100 ? 1 : 0));
+        shown.load = load;
+    }
+    if (all || vol != shown.vol) {
+        memcpy(s, "Vol ", 4);
+        s[4] = (char)('0' + vol);
+        s[5] = 0;
+        gfx_fill(BAR_VOL_X, 5, 30, 10, GFX_BLACK);
+        text(BAR_VOL_X, s);
+        shown.vol = (u8)vol;
+    }
 
     /* The network: its name and signal if the adapter tells, else our address. */
-    gfx_fill(BAR_NET_X, 0, BAR_CLOCK_X - BAR_NET_X - 4, BAR_H, net_open ? GFX_WHITE : GFX_BLACK);
-    gfx_icon(BAR_NET_X + 4, 4, !up ? &icon_wifi0 : !wifi_now.name[0] ? &icon_wifi4 :
-             fans[wifi_bars(wifi_now.signal) - 1], !net_open);
+    fan = !up ? &icon_wifi0 : !wifi_now.name[0] ? &icon_wifi4 : fans[wifi_bars(wifi_now.signal) - 1];
     if (up && wifi_now.name[0]) {
         memcpy(s, wifi_now.name, 10);
         s[10] = 0;
@@ -144,14 +181,25 @@ static void draw_figures(u32 load)
     } else {
         memcpy(s, "offline", 8);
     }
-    gfx_text(BAR_NET_X + 26, 5, s, !net_open, 1, 0);
+    if (all || fan != shown.fan || net_open != shown.net_open || strcmp(s, shown.net) != 0) {
+        gfx_fill(BAR_NET_X, 0, BAR_CLOCK_X - BAR_NET_X - 4, BAR_H, net_open ? GFX_WHITE : GFX_BLACK);
+        gfx_icon(BAR_NET_X + 4, 4, fan, !net_open);
+        gfx_text(BAR_NET_X + 26, 5, s, !net_open, 1, 0);
+        shown.fan = fan;
+        shown.net_open = net_open;
+        memcpy(shown.net, s, 11);
+    }
 
-    gfx_fill(BAR_CLOCK_X - 4, 0, SCREEN_W - BAR_CLOCK_X + 4, BAR_H, GFX_BLACK);
-    put_num(s, secs % 86400 / 3600, 2);
-    s[2] = ':';
-    put_num(s + 3, secs % 3600 / 60, 2);
-    s[5] = 0;
-    text(BAR_CLOCK_X, s);
+    if (all || minute != shown.minute) {
+        gfx_fill(BAR_CLOCK_X - 4, 0, SCREEN_W - BAR_CLOCK_X + 4, BAR_H, GFX_BLACK);
+        put_num(s, minute % 1440 / 60, 2);
+        s[2] = ':';
+        put_num(s + 3, minute % 60, 2);
+        s[5] = 0;
+        text(BAR_CLOCK_X, s);
+        shown.minute = minute;
+    }
+    shown.all = 0;
     gfx_end();
 }
 
@@ -170,7 +218,9 @@ void bar_draw(void)
     gfx_begin();
     gfx_fill(0, 0, BAR_TITLE_W, BAR_H, title_open ? GFX_WHITE : GFX_BLACK);
     gfx_text(8, 5, "SSH OS", !title_open, 1, 1);
+    dotted(8, 43, title_open ? GFX_BLACK : GFX_WHITE);
     gfx_end();
+    shown.all = 1;
     draw_figures(last_load);
 }
 

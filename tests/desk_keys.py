@@ -15,8 +15,6 @@ steps = [
     r" \p",                     # any key closes it
     r"w\p\s",                   # 4: the network panel
     r" \p",
-    r"m\p\s",                   # 5: what uses the memory
-    r" \p",
     r"\>\p",                    # Right arrow: Hardware test is chosen
     r"\M(216,90)\p\c" + r"\p" * 4,  # click its icon (256, 120); it looks at the SCSI bus first
     r"x\p\s",                   # 5: the hardware test, after pressing x
@@ -32,9 +30,10 @@ steps = [
     r"\M(-52,0)\p\c\p\s",       # 9: its - button (306, 9): 6
     r"\M(-66,186)\p-\p\s",      # 10: pointer away again; and the - key: 5
     r"\M(-112,-75)\p\c\p",      # click the SSH icon (128, 120): no connections yet, so
-    r"juan@se.local\p\s",       # 11: the New connection window, with something typed
+    r"juan@10.0.0.9\p\s",       # 11: the New connection window, with something typed
+    r"\M(30,81)\p\c" + r"\p" * 6 + r"\s",  # its Ping button (158, 201): nobody at that address
     ESC + r"\p\s",              # 12: Esc: the home screen again
-    r"\M(256,0)\p\c\p\s",       # 13: click the Settings icon (384, 120): its window
+    r"\M(226,-81)\p\c\p\s",     # 13: click the Settings icon (384, 120): its window
     r"\>\>\p",                   # mouse speed, by the Right arrow twice: 2 to 4
     r"\M(-74,8)\p\c\p",          # at that speed the pointer goes twice as far: to the
                                 # - box of the mouse speed (236, 136), and click: 3

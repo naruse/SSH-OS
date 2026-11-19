@@ -43,6 +43,10 @@
         .equ    BIG_XB, 20
         .equ    BIG_Y, 164
         .equ    BIG_VSCALE, 4
+        .equ    LOGO_XB, 26
+        .equ    LOGO_Y, 50
+        .equ    BY_Y, 206
+        .equ    FOOT_Y, 310
         .equ    STATUS_XB, 25
         .equ    STATUS_Y, 264
 
@@ -89,8 +93,40 @@ bg_row: bsr     fill_row
         moveq   #BIG_VSCALE,d2
         bsr     blit
 
-        lea     txt_loading(pc),a0
-        bsr     show_status
+#ifdef SCSI_BOOT
+        | The mark above it, where the kernel's start-up picture has it too:
+        | 96 rows of 12 bytes.
+        lea     logo(pc),a0
+        lea     (LOGO_Y*ROWBYTES+LOGO_XB)(a4),a1
+        moveq   #96-1,d1
+logo_row:
+        movea.l a1,a3
+        moveq   #12-1,d0
+logo_byte:
+        move.b  (a0)+,(a3)+
+        dbra    d0,logo_byte
+        lea     ROWBYTES(a1),a1
+        dbra    d1,logo_row
+
+        | And the small print of that picture: who made it, the line at the
+        | foot of the screen and the address under it. All that is left for
+        | the kernel to add are the small pictures of what has come up.
+        lea     txt_by(pc),a0
+        lea     (BY_Y*ROWBYTES+txt_by_xb)(a4),a1
+        moveq   #txt_by_wb,d0
+        bsr     blit10
+        lea     txt_who(pc),a0
+        lea     ((BY_Y+13)*ROWBYTES+txt_who_xb)(a4),a1
+        moveq   #txt_who_wb,d0
+        bsr     blit10
+        lea     txt_where(pc),a0
+        lea     ((FOOT_Y+11)*ROWBYTES+txt_where_xb)(a4),a1
+        moveq   #txt_where_wb,d0
+        bsr     blit10
+        lea     (FOOT_Y*ROWBYTES)(a4),a0
+        moveq   #-1,d2
+        bsr     fill_row
+#endif
 
 #ifdef SCSI_BOOT
         | Read the kernel, which starts at block KERNEL_BLOCK of this disk,
@@ -213,7 +249,7 @@ rb_done:
 | show_status: draw a one-line message (bitmap at a0) under the name.
 show_status:
         lea     (STATUS_Y*ROWBYTES+STATUS_XB)(a4),a1
-        moveq   #txt_loading_wb,d0      | both messages are the same width
+        moveq   #txt_error_wb,d0
         moveq   #1,d2
         | falls through into blit
 
@@ -223,6 +259,11 @@ show_status:
 | Uses d1, d3, d4, a2, a3.
 blit:
         moveq   #8-1,d1
+        bra.s   blit_row
+| blit10: the same for a bitmap of 10 rows, each drawn once.
+blit10:
+        moveq   #1,d2
+        moveq   #10-1,d1
 blit_row:
         move.w  d2,d3
         subq.w  #1,d3
@@ -253,7 +294,7 @@ fill_long:
 #include "banner.inc"
 
 #ifdef SCSI_BOOT
-        .org    0x600                   | three blocks
+        .org    0xC00                   | six blocks: up to where the kernel starts
 #else
         .org    0x400                   | assembler fails here if we overflow
 #endif

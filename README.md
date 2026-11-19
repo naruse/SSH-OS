@@ -14,14 +14,14 @@ after that it is never called again.
 **Status.** SSH OS runs on a real Macintosh SE (FDHD ROM, 4 MB) with a
 BlueSCSI: it starts from the card, shows the home screen and logs in over
 SSH. The newest parts (the terminal for full-screen programs, Settings, the
-memory panel, the "alive" dots, the start-up screen) have so far only run in
+Ping button, the start-up screen, the hardware test's board) have so far only run in
 the Snow emulator. See "Not done or not verified" at the end.
 
 ## What it does
 
 | | |
 |---|---|
-| Start-up | The SE's ROM loads a 1.5 KB loader from the BlueSCSI (or a 1 KB boot block from a floppy), which loads the kernel. A row of small pictures fills in as each part comes up |
+| Start-up | The SE's ROM loads a 3 KB loader from the BlueSCSI (or a 1 KB boot block from a floppy), which draws the start-up picture and loads the kernel. A row of small pictures fills in as each part comes up |
 | Kernel | Interrupts, 60 Hz clock, crash screen, serial log on the modem port |
 | Input | Keyboard and mouse (ADB), our own driver; mouse speed in Settings |
 | Disk | SCSI driver: scan the bus, read and write blocks |
@@ -30,7 +30,7 @@ the Snow emulator. See "Not done or not verified" at the end.
 | SSH | Curve25519, Ed25519, ChaCha20-Poly1305, all in plain C on the 68000; log-in by key or password |
 | Terminal | An xterm-style terminal, 85 x 32 characters, so full-screen programs work: editors, `top`, `tmux`, text interfaces |
 | Home screen | A bar (memory, processor load, volume, network, clock), the SSH OS menu, and icons for SSH, the hardware test and Settings; mouse or keyboard |
-| Hardware test | One screen to try memory, SCSI, network, keyboard, mouse and screen |
+| Hardware test | The SE's logic board with a number on each part, and a field for each to see and try it: keyboard and mouse, SCSI, network, sound, screen, memory |
 
 ## What you need
 
@@ -129,7 +129,6 @@ The start-up screen shows for a few seconds, then the home screen.
 |---|---|---|
 | Open SSH, the hardware test or Settings | click its icon | Left/Right, then Return |
 | SSH OS menu | click SSH OS in the bar | J, then Up/Down and Return |
-| What uses the memory | click Mem in the bar | M |
 | Network details, other WiFi networks | click the fan icon | W |
 | Volume down and up | click the - and + on either side of Vol | - and + |
 | Close a menu, panel or window | click elsewhere | Esc or any key |
@@ -140,9 +139,12 @@ too. The SSH OS menu has About, Home, OSConsole (the command line; `help`
 lists every command), Restart and Shut down.
 
 **SSH** opens on the list of connections used before, newest first, with
-"New connection" under them. Each one is checked while the list is up: a
-filled dot and a time mean its SSH port answered, a ring means no answer.
+"New connection" under them. "New connection" has a Ping button (or Tab): it says whether the
+server answers and SSH is listening. Connect asks the same first, so a dead
+server is reported in about 4 seconds, before the slow key work.
 Up/Down and Return or a click connect; Delete forgets one.
+
+![Ping in the New connection window](docs/ping.png)
 
 ![About SSH OS](docs/about.png)
 
@@ -151,11 +153,22 @@ Up/Down and Return or a click connect; Delete forgets one.
 **Settings** has the mouse speed (seven steps, from half speed to six times)
 and the volume. Both are kept on the SSH OS disk.
 
-![What uses the memory](docs/memory.png)
+![The hardware test](docs/hwtest.png)
 
-**Mem** shows how much each part of the system takes. Nothing in SSH OS asks
-for memory while it runs, so every share is fixed when it is built
-(`tools/mkmem.py` adds them up).
+**Hardware test** draws the SE's logic board as it lies in the case, after a
+photograph of one: the sockets of the back panel along the top, the memory
+along the bottom. Each numbered part has a field beside it with what it
+reports now (the last key, where the mouse is, what answers on the SCSI
+bus) and, where there is something to try, a button: Ping, Beep, Test. The
+keys P, B, S and M do the same; + and - change the volume; Esc goes back.
+
+![The memory test](docs/memtest.png)
+
+The memory test shows the machine's memory as 64 squares. Each fills in as
+it is written and turns black as it reads back good, twice over with
+opposite patterns; a square that reads back wrong keeps a cross. The
+hatched squares hold SSH OS itself, its stack and the screen, and are left
+alone. It takes about 15 seconds; Esc stops it.
 
 The time comes from the Mac's own battery-backed clock, as the ROM read it at
 start-up; if that battery is flat it will be wrong.
@@ -200,8 +213,8 @@ switching the machine off mid-write leaves the old file or the new one.
 takes to look at every ID at start-up (that happens after the home screen is
 up).
 
-`start = shell` in `config.txt` starts at the command line instead; `ssh`,
-`term` and `home` start those programs.
+`start = shell` in `config.txt` starts at the command line instead; `ssh`
+and `term` start those programs.
 
 ## SSH
 
@@ -327,7 +340,6 @@ make test-all
 | `test-scsi` | Bus scan, block read, write and read back, read speed |
 | `test-net`, `test-tcp` | Ping; a 256 KB download and a 32 KB echo with every byte checked |
 | `test-term` | The real helper and a shell, through the emulator: output, accents shown and typed, Meta |
-| `test-home`, `test-autostart` | The panel against the stand-in server, by keyboard and mouse |
 | `test-net-host` | The network code on this computer against a simulated network: DHCP, DNS, TCP with lost, damaged and reordered packets |
 | `test-misc-host`, `test-helper` | SHA-256, settings parser, every Option combination of the keyboard, the WiFi commands against a stand-in, the helper's screen model and encoder |
 | `test-desk` | The home screen in the emulator: SSH OS menu, About, network panel, hardware test and back, by keys and mouse |
@@ -384,7 +396,8 @@ keyboard and mouse would need their own driver.
 - On the real SE: starting from the BlueSCSI, the home screen and an SSH
   log-in work. Everything added after that first run has only been tried in
   the emulator: the terminal for full-screen programs, Settings and the mouse
-  speed, the memory panel, the alive dots, the start-up screen.
+  speed, the Ping button, the start-up screen, the hardware test's board and
+  the memory map.
 - SSH:
   - Connecting takes about a minute (see above).
   - Random numbers, which SSH's safety rests on, are gathered from the
@@ -399,7 +412,7 @@ keyboard and mouse would need their own driver.
     when set to) the screen stands still for about 45 seconds.
   - The terminal has no colours, no mouse reporting and a fixed size; wide
     characters (Chinese, Japanese, Korean, emoji) show as `?`.
-  - The alive check is a connection to the SSH port that is dropped at once;
+  - Ping is a connection to the SSH port that is dropped at once;
     a careful server may log it. Its time is measured in sixtieths of a
     second, so small figures are rough.
 - SSH OS disk:
@@ -448,22 +461,6 @@ python3 -m tools.juanterm.server --secret-file ~/.juanterm-secret --allow 192.16
 the secret. Whoever passes the check gets a shell as you. The secret itself
 never crosses the network, but what you type and see afterwards does, without
 encryption, so use this on your home network only.
-
-`home` is a Home Assistant panel: tiles for lights and switches.
-
-### Home Assistant
-
-In Home Assistant, open your profile, **Security**, and create a long-lived
-access token; put it in `config.txt` as `ha_token`, and the address as
-`ha = 192.168.1.5:8123`. The panel uses plain HTTP, so Home Assistant must be
-reachable without HTTPS on the home network.
-
-With no further settings the panel shows every light and switch, twelve to a
-page. To choose and order them yourself:
-
-```
-ha_entities = light.living_room, switch.coffee_maker, light.porch
-```
 
 ## Where things are
 

@@ -474,61 +474,6 @@ void bar_volume_change(int by)
     volume_to(v < 0 ? 0 : v > 7 ? 7 : v);
 }
 
-/* ------------------------------------------------------------ memory -- */
-
-/* What uses the memory. Every part's share is fixed when the system is
- * built (tools/mkmem.py adds them up), so this is a table, not a census. */
-#define MEM_X       62
-#define MEM_W       292
-#define MEM_ROW     15
-
-static void mem_line(int y, const char *name, u32 bytes, u32 most, int bold)
-{
-    char num[12];
-    u32 k = (bytes + 512) / 1024;
-    int n;
-
-    put_count(num, k ? k : 1);
-    n = (int)strlen(num);
-    memcpy(num + n, " K", 3);
-    gfx_text(MEM_X + 10, y, name, 0, 1, bold);
-    gfx_text(MEM_X + MEM_W - 10 - gfx_text_width(num, 1), y, num, 0, 1, bold);
-    if (most)
-        gfx_fill(MEM_X + 172, y + 2, (int)(1 + bytes * 56 / most), 6, GFX_BLACK);
-}
-
-void bar_memory(void)
-{
-    u32 used = (u32)(__bss_end - __kernel_start), listed = 0, screen = 512 / 8 * 342;
-    int i, y = BAR_H + 8, h = (mem_nparts + 6) * MEM_ROW + 6;
-    u8 ch, raw;
-
-    gfx_begin();
-    open_box(MEM_X, BAR_H, MEM_W, h);
-    for (i = 0; i < mem_nparts; i++, y += MEM_ROW) {
-        mem_line(y, mem_parts[i].name, mem_parts[i].bytes, mem_parts[0].bytes, 0);
-        listed += mem_parts[i].bytes;
-    }
-    if (used > listed) {
-        mem_line(y, "Arithmetic and gaps", used - listed, mem_parts[0].bytes, 0);
-        y += MEM_ROW;
-    }
-    mem_line(y, "The screen itself", screen, mem_parts[0].bytes, 0);
-    y += MEM_ROW + 3;
-    gfx_fill(MEM_X + 10, y, MEM_W - 20, 1, GFX_BLACK);
-    y += 6;
-    mem_line(y, "In use", used + screen, 0, 1);
-    y += MEM_ROW;
-    mem_line(y, "Free", machine.mem_top - used - screen, 0, 0);
-    y += MEM_ROW;
-    mem_line(y, "This Macintosh has", machine.mem_top, 0, 0);
-    gfx_end();
-    note("memory panel open");
-    while (event(&ch, &raw) == 0)
-        ;
-    close_box();
-}
-
 /* Has the bar been clicked? If so, do what was asked. Returns BAR_NONE, or
  * BAR_USED when something was opened and closed again, or BAR_HOME or
  * BAR_CONSOLE when the menu asks the program to go there. */
@@ -547,8 +492,6 @@ int bar_poll(void)
         return bar_menu();
     if (x >= BAR_NET_X && x < BAR_CLOCK_X - 4)
         bar_panel();
-    else if (x >= BAR_MEM_X && x < BAR_MEM_END)
-        bar_memory();
     else if (x >= BAR_VOL_LESS - 1 && x < BAR_VOL_LESS + BAR_VOL_BTN + 1)
         bar_volume_change(-1);
     else if (x >= BAR_VOL_MORE - 1 && x < BAR_VOL_MORE + BAR_VOL_BTN + 2)

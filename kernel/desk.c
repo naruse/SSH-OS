@@ -96,121 +96,24 @@ static const char *choices[LIST_MAX];
 static int nchoices;
 static u8 has_setting;          /* the first choice is the setting "ssh", not a saved one */
 
-/* Is each one alive? Every saved connection is tried when the list opens,
- * one after the other: a connection to its SSH port, dropped as soon as it
- * is answered. That says more than a ping would: the machine is up, the way
- * to it is open, and something there is listening for SSH. */
-enum { ALIVE_WAITING, ALIVE_CHECKING, ALIVE_YES, ALIVE_NO_ANSWER, ALIVE_NO_SSH, ALIVE_NO_NAME,
-       ALIVE_OFFLINE };
-static u8 alive[LIST_MAX];
-static u16 alive_ms[LIST_MAX];
-static int probing = -1, probe_conn = -1;
-static u32 probe_started;
-
+/* The dots the New connection window shows beside what Ping found. */
 static const u16 dot_full[8] = {0x3C00, 0x7E00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0x7E00, 0x3C00};
 static const u16 dot_ring[8] = {0x3C00, 0x4200, 0x8100, 0x8100, 0x8100, 0x8100, 0x4200, 0x3C00};
 static const u16 dot_wait[8] = {0x0000, 0x0000, 0x0000, 0xDB00, 0xDB00, 0x0000, 0x0000, 0x0000};
 
 static void draw_choice(int i, int on)
 {
-    char shown[40], status[12];
+    char shown[48];
     u32 n = strlen(choices[i]);
-    int y = LIST_Y + i * LIST_ROW, last = i == nchoices - 1, k = 0;
-    u32 v;
+    int y = LIST_Y + i * LIST_ROW;
 
     /* what fits; a long name is cut at the end */
-    memcpy(shown, choices[i], n < 34 ? n + 1 : 34);
-    shown[34] = 0;
+    memcpy(shown, choices[i], n < 44 ? n + 1 : 44);
+    shown[44] = 0;
     gfx_begin();
     gfx_fill(LIST_X, y, LIST_W, LIST_ROW, on ? GFX_BLACK : GFX_WHITE);
-    gfx_text(LIST_X + 24, y + 3, shown, on, 1, last);
-    if (!last && alive[i] != ALIVE_OFFLINE) {
-        gfx_picture(LIST_X + 8, y + 4, alive[i] == ALIVE_YES ? dot_full :
-                    alive[i] <= ALIVE_CHECKING ? dot_wait : dot_ring, 8, on, 1);
-        status[0] = 0;
-        if (alive[i] == ALIVE_YES) {
-            v = alive_ms[i];
-            if (v >= 1000) status[k++] = (char)('0' + v / 1000 % 10);
-            if (v >= 100) status[k++] = (char)('0' + v / 100 % 10);
-            if (v >= 10) status[k++] = (char)('0' + v / 10 % 10);
-            status[k++] = (char)('0' + v % 10);
-            memcpy(status + k, " ms", 4);
-        } else if (alive[i] == ALIVE_NO_ANSWER) {
-            memcpy(status, "no answer", 10);
-        } else if (alive[i] == ALIVE_NO_SSH) {
-            memcpy(status, "no SSH", 7);
-        } else if (alive[i] == ALIVE_NO_NAME) {
-            memcpy(status, "not found", 10);
-        }
-        gfx_text(LIST_X + LIST_W - 8 - gfx_text_width(status, 1), y + 3, status, on, 1, 0);
-    }
+    gfx_text(LIST_X + 8, y + 3, shown, on, 1, i == nchoices - 1);
     gfx_end();
-}
-
-static void probe_stop(void)
-{
-    if (probe_conn >= 0)
-        tcp_abort(probe_conn);
-    probe_conn = -1;
-    probing = -1;
-}
-
-/* One step of the checking; at is the line that is lit. */
-static void probe_step(int at)
-{
-    char host[64];
-    const char *s, *p;
-    u32 ip, port = 0;
-    int i, n = 0;
-
-    if (probing >= 0) {
-        if (!tcp_connecting(probe_conn)) {
-            if (tcp_is_open(probe_conn)) {
-                u32 ms = (ticks - probe_started) * 1000 / 60;
-
-                alive[probing] = ALIVE_YES;
-                alive_ms[probing] = (u16)(ms > 9999 ? 9999 : ms ? ms : 1);
-            } else {
-                alive[probing] = ALIVE_NO_SSH;
-            }
-        } else if (ticks - probe_started > 4 * 60) {
-            alive[probing] = ALIVE_NO_ANSWER;
-        } else {
-            return;
-        }
-        i = probing;
-        probe_stop();
-        draw_choice(i, i == at);
-        return;
-    }
-    for (i = 0; i < nchoices - 1 && alive[i] != ALIVE_WAITING; i++)
-        ;
-    if (i >= nchoices - 1)
-        return;
-    /* user@host:port */
-    s = choices[i];
-    for (p = s; *p; p++)
-        if (*p == '@')
-            s = p + 1;
-    while (*s && *s != ':' && n < (int)sizeof host - 1)
-        host[n++] = *s++;
-    host[n] = 0;
-    if (*s == ':')
-        for (s++; *s >= '0' && *s <= '9'; s++)
-            port = port * 10 + (u32)(*s - '0');
-    alive[i] = ALIVE_CHECKING;
-    draw_choice(i, i == at);
-    if (net_resolve(host, &ip) != 0) {
-        alive[i] = ALIVE_NO_NAME;
-    } else if ((probe_conn = tcp_open(ip, (u16)(port ? port : 22))) < 0) {
-        alive[i] = ALIVE_NO_ANSWER;
-        probe_conn = -1;
-    } else {
-        probing = i;
-        probe_started = ticks;
-        return;
-    }
-    draw_choice(i, i == at);
 }
 
 static void build_choices(void)
@@ -232,8 +135,6 @@ static void build_choices(void)
     for (i = 0; i < recent_count(); i++)
         choices[nchoices++] = recent_get(i);
     choices[nchoices++] = "New connection...";
-    probe_stop();
-    memset(alive, net.up && net.ip ? ALIVE_WAITING : ALIVE_OFFLINE, sizeof alive);
 }
 
 static void draw_choices(int at)
@@ -264,12 +165,10 @@ static int choose_target(void)
     note("connections");
     for (;;) {
         net_poll();
-        probe_step(at);
         bar_tick();
         r = bar_poll();
         if (r == BAR_HOME || r == BAR_CONSOLE) {
             leave = (u8)r;
-            probe_stop();
             return -1;
         }
         if (r != BAR_NONE)
@@ -279,7 +178,6 @@ static int choose_target(void)
             hit = (mouse.click_y - LIST_Y) / LIST_ROW;
             if (mouse.click_y >= LIST_Y && hit < nchoices && mouse.click_x >= LIST_X &&
                 mouse.click_x < LIST_X + LIST_W) {
-                probe_stop();
                 return hit;
             }
         }
@@ -298,11 +196,9 @@ static int choose_target(void)
             at = raw == 0x3D ? (at + 1) % nchoices : (at + nchoices - 1) % nchoices;
             draw_choice(at, 1);
         } else if (ch == '\n') {
-            probe_stop();
             return at;
         } else if (ch == 0x1B) {
             kbd_escape = 0;
-            probe_stop();
             return -1;
         } else if (ch == '\b' && at < nchoices - 1 && !(has_setting && at == 0)) {
             recent_remove(at - has_setting);            /* forget this one */
@@ -320,11 +216,13 @@ static int choose_target(void)
 #define FORM_W      280
 #define FIELD_Y     (BAR_H + 116)
 #define FIELD_H     22
-#define BTN_Y       (BAR_H + 156)
+#define RESULT_Y    (BAR_H + 146)      /* what Ping found */
+#define BTN_Y       (BAR_H + 172)
 #define BTN_H       22
 #define BTN_W       84
 #define BTN_OK_X    (FORM_X + FORM_W - BTN_W)
 #define BTN_NO_X    (BTN_OK_X - BTN_W - 12)
+#define BTN_PING_X  FORM_X
 #define FIELD_CHARS 42          /* how many fit in the field */
 
 static void draw_field(const char *line, u32 n, int caret)
@@ -341,8 +239,44 @@ static void draw_field(const char *line, u32 n, int caret)
     gfx_end();
 }
 
+/* The line under the field: what Ping found (result one of KNOCK_, or -1
+ * for "checking", or -2 to clear it). */
+static void draw_result(int result, u32 ms)
+{
+    char text[48];
+
+    gfx_begin();
+    gfx_fill(FORM_X, RESULT_Y - 2, FORM_W, 14, GFX_WHITE);
+    if (result > -2) {
+        if (result < 0)
+            memcpy(text, "Checking", 9);
+        else
+            connect_knock_text(result, ms, text);
+        gfx_picture(FORM_X + 2, RESULT_Y + 1, result < 0 ? dot_wait :
+                    result == KNOCK_ANSWERS ? dot_full : dot_ring, 8, 0, 1);
+        gfx_text(FORM_X + 16, RESULT_Y, text, 0, 1, 0);
+    }
+    gfx_end();
+}
+
+static void ping(const char *line)
+{
+    char said[] = "DESK: ping 0\n";
+    u32 ms;
+    int r;
+
+    draw_result(-1, 0);
+    r = connect_knock(line, &ms);
+    draw_result(r, ms);
+    said[11] = (char)('0' + r);
+    serial_puts(said);
+    while (kbd_get_event() >= 0)        /* keys pressed meanwhile were for nobody */
+        ;
+}
+
 /* Ask who to log in to, in a window of its own: a field to type in, and
- * Cancel and Connect (Esc and Return). Returns 1 with the answer in line
+ * Cancel and Connect (Esc and Return), and Ping (Tab), which says whether
+ * the server is there without connecting. Returns 1 with the answer in line
  * (of size bytes), or 0 to go back. With keep, what line holds is there to
  * be changed. */
 static int new_connection(char *line, u32 size, int keep)
@@ -361,6 +295,7 @@ static int new_connection(char *line, u32 size, int keep)
     gfx_text(SCREEN_W / 2 - gfx_text_width(title, 1) / 2, BAR_H + 74, title, 0, 1, 1);
     gfx_text(FORM_X, FIELD_Y - 14, label, 0, 1, 0);
     gfx_fill(FORM_X, FIELD_Y, FORM_W, FIELD_H, GFX_BLACK);
+    ask_button(BTN_PING_X, BTN_Y, "Ping", 0);
     ask_button(BTN_NO_X, BTN_Y, "Cancel", 0);
     ask_button(BTN_OK_X, BTN_Y, "Connect", 1);
     gfx_end();
@@ -385,6 +320,10 @@ static int new_connection(char *line, u32 size, int keep)
                     return 0;
                 if (x >= BTN_OK_X && x < BTN_OK_X + BTN_W && n)
                     return 1;
+                if (x >= BTN_PING_X && x < BTN_PING_X + BTN_W && n) {
+                    ping(line);
+                    clicks = mouse.clicks;
+                }
             }
         }
         if (ticks - blink >= 30) {
@@ -408,6 +347,11 @@ static int new_connection(char *line, u32 size, int keep)
             if (n)
                 return 1;
             continue;
+        } else if (ch == '\t') {
+            if (n)
+                ping(line);
+            clicks = mouse.clicks;
+            continue;
         } else if (ch == '\b') {
             if (!n)
                 continue;
@@ -421,6 +365,7 @@ static int new_connection(char *line, u32 size, int keep)
         caret = 1;
         blink = ticks;
         draw_field(line, n, caret);
+        draw_result(-2, 0);             /* it was about what stood there before */
     }
 }
 
@@ -571,9 +516,6 @@ void cmd_desk(void)
                 seen_clicks = mouse.clicks;
             } else if (ch == 'w' || ch == 'W') {
                 bar_panel();
-                seen_clicks = mouse.clicks;
-            } else if (ch == 'm' || ch == 'M') {
-                bar_memory();
                 seen_clicks = mouse.clicks;
             } else if (ch == 'v' || ch == 'V') {
                 bar_volume_step();

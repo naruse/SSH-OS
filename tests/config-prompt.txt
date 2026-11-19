@@ -3,6 +3,4 @@
 network = dhcp
 helper = 192.168.1.10:2323
 secret = change-this-secret
-ha = 192.168.1.5:8123
-ha_token =
 start = shell
