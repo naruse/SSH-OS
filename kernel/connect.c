@@ -32,6 +32,39 @@ static char label[LINE_LEN], more[MORE_MAX][LINE_LEN], cur[LINE_LEN];
 static int nmore, cur_len, stage, dots;
 static u8 quiet;                /* collect the lines but draw nothing */
 static u8 logged_in;
+static u8 cancelled;            /* the user gave up: nothing to report */
+
+/* The Cancel button under the steps. */
+#define STOP_W      108
+#define STOP_X      ((SCREEN_W - STOP_W) / 2)
+#define STOP_Y      (SCREEN_H - 40)
+
+static void draw_stop(void)
+{
+    static const char text[] = "Cancel (Esc)";
+
+    gfx_begin();
+    gfx_round_box(STOP_X, STOP_Y, STOP_W, 22, GFX_WHITE, 1);
+    gfx_text(STOP_X + (STOP_W - gfx_text_width(text, 1)) / 2, STOP_Y + 6, text, 0, 1, 0);
+    gfx_end();
+}
+
+/* Asked all through connecting, from every wait and every long sum: has
+ * the user had enough? Esc, or a click on Cancel. */
+static u32 stop_clicks;
+static int stop_wanted(void)
+{
+    if (mouse.clicks != stop_clicks) {
+        stop_clicks = mouse.clicks;
+        if (mouse.click_x >= STOP_X && mouse.click_x < STOP_X + STOP_W &&
+            mouse.click_y >= STOP_Y && mouse.click_y < STOP_Y + 22)
+            kbd_escape = 1;
+    }
+    if (kbd_escape && !logged_in)
+        cancelled = 1;
+    return kbd_escape;
+}
+
 static const u16 dot[8] = {0x3C00, 0x7E00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0x7E00, 0x3C00};
 
 static void centered(int y, const char *s, int bold)
@@ -102,7 +135,7 @@ int connect_knock(const char *target, u32 *ms)
         return KNOCK_NO_ANSWER;
     started = ticks;
     kbd_escape = 0;
-    while (ticks - started < 4 * 60 && !kbd_escape) {
+    while (ticks - started < 4 * 60 && !kbd_escape && !(net_abort_check && net_abort_check())) {
         net_poll();
         if (!tcp_connecting(c)) {
             r = tcp_is_open(c) ? KNOCK_ANSWERS : KNOCK_NO_SSH;
@@ -241,6 +274,7 @@ int connect_run(char *target)
     static char reach[48];
     char title[LINE_LEN];
     char *argv[2];
+    int (*abort_check)(void) = net_abort_check;
     u32 n = strlen(target), ms;
     int i, count = 0;
 
@@ -255,7 +289,9 @@ int connect_run(char *target)
     label[0] = 0;
     nmore = cur_len = dots = 0;
     stage = 0;
-    quiet = logged_in = 0;
+    quiet = logged_in = cancelled = 0;
+    kbd_escape = 0;
+    stop_clicks = mouse.clicks;
     con_clear();
     gfx_begin();
     gfx_icon(SCREEN_W / 2 - icon_ssh.w / 2, BAR_H + 24, &icon_ssh, 0);
@@ -263,6 +299,8 @@ int connect_run(char *target)
     gfx_fill(BAR_X, BAR_Y, BAR_W, 10, GFX_BLACK);
     gfx_fill(BAR_X + 1, BAR_Y + 1, BAR_W - 2, 8, GFX_WHITE);
     gfx_end();
+    draw_stop();
+    net_abort_check = stop_wanted;
 
     serial_puts("DESK: connecting\n");
     /* Knock first: the steps that follow take this machine a minute, and
@@ -271,7 +309,14 @@ int connect_run(char *target)
     draw_text();
     i = connect_knock(target, &ms);
     connect_knock_text(i, ms, reach);
+    if (cancelled) {
+        net_abort_check = abort_check;
+        kbd_escape = 0;
+        serial_puts("DESK: connecting cancelled\n");
+        return 1;
+    }
     if (i != KNOCK_ANSWERS) {
+        net_abort_check = abort_check;
         gfx_begin();
         gfx_fill(0, REACH_Y, SCREEN_W, MORE_Y + MORE_MAX * 14 - REACH_Y, GFX_WHITE);
         gfx_end();
@@ -295,6 +340,16 @@ int connect_run(char *target)
     kputc_divert(NULL);
     ssh_login_hook = NULL;
     ssh_end_hook = NULL;
+    net_abort_check = abort_check;
+    kbd_escape = 0;
+    /* Esc in the password or the trust window stops it as well: ssh says so. */
+    for (i = 0; i < nmore && !logged_in; i++)
+        if (begins(more[i], "Failed: stopped") || begins(more[i], "Stopped"))
+            cancelled = 1;
+    if (cancelled && !logged_in) {
+        serial_puts("DESK: connecting cancelled\n");
+        return 1;               /* back to where it was asked for, with nothing to say */
+    }
 
     if (logged_in && ssh_ended_well)
         return 0;               /* nothing to say */

@@ -467,6 +467,9 @@ static void busy(void)
     bar_tick();
     if ((++busy_turns & 7) == 0)
         kputc('.');
+    /* Esc (or whatever else stops a wait for the network) stops these too. */
+    if (kbd_escape || (net_abort_check && net_abort_check()))
+        crypto_stop = 1;
 }
 
 static void hash_string(struct sha256 *h, const void *data, u32 n)
@@ -832,6 +835,8 @@ static int key_exchange(const char *host)
     kputs("Working out the shared secret");
     x25519(k, ssh.secret, qs);
     kputc('\n');
+    if (crypto_stop)
+        return fail("stopped");
     memset(ssh.secret, 0, sizeof ssh.secret);
     ssh.have_pair = 0;
     for (i = 0; i < 32; i++)
@@ -849,6 +854,8 @@ static int key_exchange(const char *host)
     kputs("Checking the server's signature");
     r = ed25519_verify(sig, hash, 32, server_key);
     kputc('\n');
+    if (crypto_stop)
+        return fail("stopped");
     if (!r)
         return fail("the server's signature is wrong: it does not hold the key it showed");
     if (first) {
@@ -995,6 +1002,8 @@ static int authenticate(const char *user, const char *host)
         kputs("Signing in with the key");
         ed25519_sign(sig, scratch, 36 + tx_len, key, key + 32);
         kputc('\n');
+        if (crypto_stop)
+            return fail("stopped");
         put_u32(4 + 11 + 4 + 64);
         put_text(name_ed25519);
         put_string(sig, 64);
@@ -1423,10 +1432,18 @@ void cmd_ssh(int argc, char **argv)
     setting = config_get("termlog");
     ssh.log = setting && setting[0] == '1';
     crypto_idle = busy;
+    crypto_stop = 0;
     started = ticks;
 
     kputs("Making a one-time key (each of these steps takes this machine a while)");
     make_pair();
+    if (crypto_stop) {
+        crypto_idle = NULL;
+        crypto_stop = 0;
+        kbd_escape = 0;
+        kputs("\nStopped.\n");
+        return;
+    }
     kprintf("\nConnecting to %s port %d...\n", host, port);
     ssh.c = tcp_connect(ip, port, 10 * 60);
     if (ssh.c < 0) {
@@ -1455,6 +1472,7 @@ void cmd_ssh(int argc, char **argv)
     }
     kbd_escape = 0;
     crypto_idle = NULL;
+    crypto_stop = 0;
 
     if (r == 0 && ssh.c >= 0) {         /* a polite goodbye */
         put_start(MSG_DISCONNECT);

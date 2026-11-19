@@ -15,6 +15,10 @@
  * if set: ssh.c uses it to keep the network answered and show progress. */
 void (*crypto_idle)(void);
 
+/* Set (by that call, say) to make the calculation give up at once. What it
+ * returns is then worthless: the caller must look at this before using it. */
+volatile u8 crypto_stop;
+
 /* Add c * 2^256 (as c * 38) into r. */
 static void fe_fold(u16 *r, u32 c)
 {
@@ -301,6 +305,8 @@ void x25519(u8 *out, const u8 *scalar, const u8 *point)
         fe_mul(z2, z2, e);
         if (crypto_idle && (t & 7) == 0)
             crypto_idle();
+        if (crypto_stop)
+            break;
     }
     fe_cswap(x2, x3, swap);
     fe_cswap(z2, z3, swap);

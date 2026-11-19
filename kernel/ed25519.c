@@ -303,6 +303,8 @@ static void ge_multiply(struct ge *r, const u8 *a, const struct ge *A, const u8 
         }
         if (crypto_idle)
             crypto_idle();
+        if (crypto_stop)
+            break;
     }
     memset(table_a, 0, sizeof table_a);     /* they may describe a secret */
 }

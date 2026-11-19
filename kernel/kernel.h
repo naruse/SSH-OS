@@ -69,6 +69,7 @@ void chacha20(const u8 *key32, const u8 *nonce12, u32 counter, u8 *data, u32 len
 /* If set, called now and then during the long calculations (x25519 and
  * the ed25519 functions), to keep the network answered and show progress. */
 extern void (*crypto_idle)(void);
+extern volatile u8 crypto_stop;         /* makes those calculations give up at once */
 
 /* sha512.c */
 struct sha512 {

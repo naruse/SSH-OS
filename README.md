@@ -144,6 +144,10 @@ server answers and SSH is listening. Connect asks the same first, so a dead
 server is reported in about 4 seconds, before the slow key work.
 Up/Down and Return or a click connect; Delete forgets one.
 
+In the New connection field a click or the Left and Right arrows move the
+caret. While it connects there is a Cancel button; Esc does the same, at any
+point, the slow key steps included.
+
 ![Ping in the New connection window](docs/ping.png)
 
 ![About SSH OS](docs/about.png)

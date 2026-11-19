@@ -225,17 +225,31 @@ static int choose_target(void)
 #define BTN_PING_X  FORM_X
 #define FIELD_CHARS 42          /* how many fit in the field */
 
-static void draw_field(const char *line, u32 n, int caret)
-{
-    /* The end of a long line is what shows. */
-    const char *shown = n > FIELD_CHARS ? line + n - FIELD_CHARS : line;
-    int w = gfx_text_width(shown, 1);
+static u32 field_first;         /* the first character that shows, of a line longer than the field */
 
+/* The field with the caret before character `at` (lit or not). A long line
+ * slides so that the caret is always in sight. */
+static void draw_field(const char *line, u32 n, u32 at, int caret)
+{
+    char shown[FIELD_CHARS + 1];
+    u32 k;
+
+    if (at < field_first)
+        field_first = at;
+    if (at > field_first + FIELD_CHARS)
+        field_first = at - FIELD_CHARS;
+    if (n <= FIELD_CHARS)
+        field_first = 0;
+    k = n - field_first;
+    if (k > FIELD_CHARS)
+        k = FIELD_CHARS;
+    memcpy(shown, line + field_first, k);
+    shown[k] = 0;
     gfx_begin();
     gfx_fill(FORM_X + 2, FIELD_Y + 2, FORM_W - 4, FIELD_H - 4, GFX_WHITE);
     gfx_text(FORM_X + 8, FIELD_Y + 6, shown, 0, 1, 0);
     if (caret)
-        gfx_fill(FORM_X + 9 + w, FIELD_Y + 4, 1, FIELD_H - 8, GFX_BLACK);
+        gfx_fill(FORM_X + 8 + (int)(at - field_first) * 6, FIELD_Y + 4, 1, FIELD_H - 8, GFX_BLACK);
     gfx_end();
 }
 
@@ -282,13 +296,14 @@ static void ping(const char *line)
 static int new_connection(char *line, u32 size, int keep)
 {
     static const char title[] = "New connection", label[] = "user@server";
-    u32 clicks = mouse.clicks, n, blink = ticks;
+    u32 clicks = mouse.clicks, n, at, blink = ticks;
     int ev, r, caret = 1, x, y;
-    u8 ch;
+    u8 ch, raw;
 
     if (!keep)
         line[0] = 0;
-    n = strlen(line);
+    at = n = strlen(line);
+    field_first = 0;
     con_clear();
     gfx_begin();
     gfx_icon(SCREEN_W / 2 - icon_ssh.w / 2, BAR_H + 24, &icon_ssh, 0);
@@ -299,7 +314,7 @@ static int new_connection(char *line, u32 size, int keep)
     ask_button(BTN_NO_X, BTN_Y, "Cancel", 0);
     ask_button(BTN_OK_X, BTN_Y, "Connect", 1);
     gfx_end();
-    draw_field(line, n, caret);
+    draw_field(line, n, at, caret);
     note("new connection");
     for (;;) {
         net_poll();
@@ -324,12 +339,21 @@ static int new_connection(char *line, u32 size, int keep)
                     ping(line);
                     clicks = mouse.clicks;
                 }
+            } else if (y >= FIELD_Y && y < FIELD_Y + FIELD_H && x >= FORM_X && x < FORM_X + FORM_W) {
+                /* a click in the field puts the caret between the letters there */
+                x = (x - FORM_X - 8 + 3) / 6;
+                at = field_first + (u32)(x < 0 ? 0 : x);
+                if (at > n)
+                    at = n;
+                caret = 1;
+                blink = ticks;
+                draw_field(line, n, at, caret);
             }
         }
         if (ticks - blink >= 30) {
             blink = ticks;
             caret = !caret;
-            draw_field(line, n, caret);
+            draw_field(line, n, at, caret);
         }
         ev = kbd_get_event();
         if (ev < 0) {
@@ -340,6 +364,17 @@ static int new_connection(char *line, u32 size, int keep)
         if (ev & 0x8000)
             continue;
         ch = (u8)(ev & 0xFF);
+        raw = (u8)((ev >> 8) & 0x7F);
+        if (raw == 0x3B || raw == 0x3C) {               /* Left, Right: the caret */
+            if (raw == 0x3B && at)
+                at--;
+            if (raw == 0x3C && at < n)
+                at++;
+            caret = 1;
+            blink = ticks;
+            draw_field(line, n, at, caret);
+            continue;
+        }
         if (ch == 0x1B) {
             kbd_escape = 0;
             return 0;
@@ -353,18 +388,21 @@ static int new_connection(char *line, u32 size, int keep)
             clicks = mouse.clicks;
             continue;
         } else if (ch == '\b') {
-            if (!n)
+            if (!at)
                 continue;
-            line[--n] = 0;
+            memmove(line + at - 1, line + at, n - at + 1);     /* the one before the caret */
+            at--;
+            n--;
         } else if (ch > ' ' && ch < 0x7F && n + 1 < size) {
-            line[n++] = (char)ch;
-            line[n] = 0;
+            memmove(line + at + 1, line + at, n - at + 1);
+            line[at++] = (char)ch;
+            n++;
         } else {
             continue;
         }
         caret = 1;
         blink = ticks;
-        draw_field(line, n, caret);
+        draw_field(line, n, at, caret);
         draw_result(-2, 0);             /* it was about what stood there before */
     }
 }
