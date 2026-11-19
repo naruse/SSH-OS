@@ -55,7 +55,7 @@ ASFLAGS := -m68000 -Wa,--register-prefix-optional
 KOBJS := $(addprefix $(B)/, start.o kmain.o machine.o console.o serial.o \
            kprintf.o trap.o via.o adb.o kbd.o timer.o scsi.o dayna.o net.o tcp.o \
            config.o cfgdata.o sha256.o term.o gfx.o shell.o \
-           cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o rng.o ssh.o bench.o lib.o \
+           cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o polymul.o rng.o ssh.o bench.o lib.o \
            desk.o bar.o barmenu.o snd.o wifi.o hwtest.o fs.o saved.o ask.o connect.o vt.o splash.o settings.o banner.o icons.o font6x10.o)
 
 all: $(B)/sshos-800k.dsk $(B)/sshos-1440k.dsk $(B)/sshos-boot.hda

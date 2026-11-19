@@ -366,11 +366,11 @@ times the pieces on the emulated SE:
 | Checking the server's signature (Ed25519) | 20.7 seconds |
 | Signing with the SE's key (Ed25519) | 16.0 seconds |
 | ChaCha20 | 18.8 KB per second |
-| Poly1305 | 8.2 KB per second |
+| Poly1305 (its multiplication in assembly) | 12.3 KB per second |
 
 So logging in with a key takes 63 seconds (measured by `make test-ssh`), with
 a password about 46, and the first of those steps is done before the server
-is contacted. Afterwards output arrives at up to about 5 KB per second, since
+is contacted. Afterwards output arrives at up to about 7 KB per second, since
 every byte passes through both ChaCha20 and Poly1305; typing feels immediate.
 Most servers close a connection that has not logged in within two minutes,
 so there is room, but not much.

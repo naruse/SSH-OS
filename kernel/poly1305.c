@@ -6,12 +6,22 @@
 #define HL 9            /* limbs of the running value h: 144 bits, of which 132 are used */
 #define RL 8            /* limbs of the key part r: 128 bits */
 
+#ifdef __m68k__
+void poly_mul(u16 *d, const u16 *h, const u16 *r);
+#endif
+
 /* h = h * r modulo 2^130 - 5, left a little above the modulus (below 2^131). */
 static void mul_r(u16 *h, const u16 *r)
 {
-    u16 d[HL + RL], top[RL];
-    u32 acc = 0, hi = 0, p, c;
-    int i, k, first, last;
+    u16 d[HL + RL];
+    u32 c;
+    int i;
+
+#ifdef __m68k__
+    poly_mul(d, h, r);          /* kernel/polymul.S: the same product, twice as quick */
+#else
+    u32 acc = 0, hi = 0, p;
+    int k, first, last;
 
     for (k = 0; k < HL + RL - 1; k++) {
         first = k < RL ? 0 : k - (RL - 1);
@@ -27,13 +37,15 @@ static void mul_r(u16 *h, const u16 *r)
         hi = 0;
     }
     d[HL + RL - 1] = (u16)acc;
+#endif
 
     /* 2^130 is 5: add five times the part above bit 130 to the part below. */
-    for (i = 0; i < RL; i++)
-        top[i] = (u16)((d[8 + i] >> 2) | (d[9 + i] << 14));
     c = 0;
     for (i = 0; i < RL; i++) {
-        c += d[i] + (u32)top[i] * 5;
+        /* two limbs as one long, shifted down by two: cheap on this CPU */
+        u32 t = (u16)(((((u32)d[9 + i]) << 16) | d[8 + i]) >> 2);
+
+        c += d[i] + t + (t << 2);
         h[i] = (u16)c;
         c >>= 16;
     }
