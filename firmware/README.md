@@ -5,11 +5,17 @@ seconds over each, which is why connecting takes about a minute. The
 BlueSCSI's processor does one in a few hundredths of a second. This folder
 is an addition to the BlueSCSI firmware that lets SSH OS hand them over.
 
+Once logged in, every packet is encrypted and carries a check sum, and the
+68000 manages about 7 KB of that a second. The same addition opens and
+seals packets too. SSH OS sends it the ones of 256 bytes and more; a key
+press is quicker done at home than sent down the cable and back.
+
 **Status: not yet run on a real BlueSCSI.** What is checked: the code on
 the firmware's side gives the published answers when built for an ordinary
-computer (`make test-fw-host`), and SSH OS logs in to a real server through
-the same requests and answers with that code standing in for the BlueSCSI
-(`make test-copro`). Not checked: that it builds into the firmware, and
+computer and agrees to the byte with what SSH OS does itself (`make
+test-fw-host`), and SSH OS logs in to a real server and holds a session
+there, every sum and every packet going through the same requests and
+answers with that code standing in for the BlueSCSI (`make test-copro`). Not checked: that it builds into the firmware, and
 that it works over the cable.
 
 SSH OS asks whether the BlueSCSI can do this each time it starts, and does
@@ -29,12 +35,17 @@ second byte:
 | `02` public key | seed (32) | 1, Ed25519 public key (32) |
 | `03` sign | seed (32), public key (32), message | 1, signature (64) |
 | `04` verify | signature (64), public key (32), message | 1, then 1 = genuine |
+| `05` open a packet | its number (4), the key (64), the packet as it arrived | 1, then 1 = genuine, then its body in clear |
+| `06` seal a packet | its number (4), the key (64), the packet in clear | 1, the packet encrypted, its check sum (16) |
 
 The first byte read back is 1 if the request was done and 0 if it was
 refused. An answer is handed out once and then wiped.
 
-The arithmetic is SSH OS's own (`kernel/x25519.c`, `ed25519.c`,
-`sha512.c`): the same files the SE runs.
+The packets are those of `chacha20-poly1305@openssh.com`. Nothing is
+remembered between requests: the key travels with each packet.
+
+The arithmetic is SSH OS's own (`kernel/x25519.c`, `ed25519.c`, `sha512.c`,
+`poly1305.c`): the same files the SE runs.
 
 ## Building it into the firmware
 

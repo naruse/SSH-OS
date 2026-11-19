@@ -8,9 +8,12 @@
 #define SSHOS_PUBLIC            0x02
 #define SSHOS_SIGN              0x03
 #define SSHOS_VERIFY            0x04
+#define SSHOS_OPEN              0x05    /* version 2 on */
+#define SSHOS_SEAL              0x06
 #define SSHOS_RESULT            0x10
-#define SSHOS_CRYPTO_VERSION    1
-#define SSHOS_CRYPTO_MAX        1024    /* the most one request may write */
+#define SSHOS_CRYPTO_VERSION    2
+#define SSHOS_CRYPTO_MAX        4608    /* the most one request may write, or get back */
+#define SSHOS_PACKET_HEAD       68      /* before a packet: its number (4), the key (64) */
 
 void sshos_crypto_job(unsigned char request, const unsigned char *in, unsigned int len);
 unsigned int sshos_crypto_result(unsigned char *out, unsigned int max);
@@ -24,6 +27,10 @@ void ed25519_sign(unsigned char *sig64, const unsigned char *msg, unsigned int l
                   const unsigned char *seed32, const unsigned char *pub32);
 int  ed25519_verify(const unsigned char *sig64, const unsigned char *msg, unsigned int len,
                     const unsigned char *pub32);
+void chacha20(const unsigned char *key32, const unsigned char *nonce12, unsigned int counter,
+              unsigned char *data, unsigned int len);
+void poly1305(unsigned char *tag16, const unsigned char *key32, const unsigned char *msg,
+              unsigned int len);
 #endif
 
 #endif

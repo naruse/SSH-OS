@@ -96,6 +96,8 @@ int  copro_x25519(u8 *out32, const u8 *scalar32, const u8 *point32);
 int  copro_ed25519_public(u8 *pub32, const u8 *seed32);
 int  copro_ed25519_sign(u8 *sig64, const u8 *msg, u32 len, const u8 *seed32, const u8 *pub32);
 int  copro_ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub32);
+int  copro_open(u32 seq, const u8 *key64, u8 *packet, u32 len);    /* 1 genuine, 0 forged, -1 do it here */
+int  copro_seal(u32 seq, const u8 *key64, u8 *packet, u32 total);  /* 0 done, -1 do it here */
 
 /* rng.c: random numbers gathered from the timing of keys, mouse and network */
 void rng_init(void);

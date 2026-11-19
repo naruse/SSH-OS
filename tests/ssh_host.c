@@ -352,6 +352,11 @@ int copro_ed25519_sign(u8 *sig64, const u8 *msg, u32 len, const u8 *seed32, cons
 int copro_ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub32)
 { (void)sig64; (void)msg; (void)len; (void)pub32; return -1; }
 
+int copro_open(u32 seq, const u8 *key64, u8 *packet, u32 len)
+{ (void)seq; (void)key64; (void)packet; (void)len; return -1; }
+int copro_seal(u32 seq, const u8 *key64, u8 *packet, u32 total)
+{ (void)seq; (void)key64; (void)packet; (void)total; return -1; }
+
 int ask_keyless(const char *user, const char *host, int make)
 {
     (void)user; (void)host; (void)make;

@@ -15,7 +15,7 @@
 #include "../firmware/sshos_crypto.h"
 
 static u8 buf[SSHOS_CRYPTO_MAX];
-static s8 there;                /* 0 = not asked yet, 1 = it is there, -1 = it is not */
+static s8 there;                /* 0 = not asked yet, -1 = it is not there, else its version */
 
 static void note(const char *s)
 {
@@ -63,7 +63,7 @@ int copro_present(void)
     if (!there) {
         memset(buf, 0, 8);
         there = (command(SSHOS_HELLO, SCSI_DATA_IN, 8, &moved) == 0 && moved == 8 &&
-                 memcmp(buf, "SSHOS", 5) == 0 && buf[5] >= 1) ? 1 : -1;
+                 memcmp(buf, "SSHOS", 5) == 0 && buf[5] >= 1 && buf[5] < 100) ? (s8)buf[5] : -1;
         note(there > 0 ? "the BlueSCSI does the sums" : "none: the 68000 does the sums");
     }
     return there > 0;
@@ -81,7 +81,8 @@ static int ask(u8 request, u32 len, u32 want)
     memset(buf, 0, 1 + want);
     if (command(SSHOS_RESULT, SCSI_DATA_IN, 1 + want, &moved) != 0 || moved != 1 + want || buf[0] != 1)
         return -1;
-    note("a sum done by the BlueSCSI");
+    if (request < SSHOS_OPEN)
+        note("a sum done by the BlueSCSI");
     return 0;
 }
 
@@ -152,6 +153,80 @@ int copro_ed25519_verify(const u8 *sig64, const u8 *msg, u32 len, const u8 *pub3
     r = ask(SSHOS_VERIFY, 96 + len, 1);
     if (r == 0)
         r = buf[1] == 1;
+    wipe();
+    return r;
+}
+
+/* ---------------------------------------------------------------- packets -- */
+
+/* The packets of a session, once logged in. Short ones are not worth the
+ * two trips down the cable: the 68000 is done with a key press before the
+ * BlueSCSI has been asked. (With the stand-in everything goes this way, to
+ * try it.) */
+#ifdef COPRO_FAKE
+#define PACKET_MIN  0
+#else
+#define PACKET_MIN  256
+#endif
+
+static u8 packets_noted;
+
+static int packets_here(u32 bytes)
+{
+    return bytes >= PACKET_MIN && bytes + SSHOS_PACKET_HEAD + 20 <= sizeof buf &&
+           copro_present() && there >= 2;
+}
+
+static void packet_head(u32 seq, const u8 *key64)
+{
+    buf[0] = (u8)(seq >> 24);
+    buf[1] = (u8)(seq >> 16);
+    buf[2] = (u8)(seq >> 8);
+    buf[3] = (u8)seq;
+    memcpy(buf + 4, key64, 64);
+}
+
+/* A packet as it arrived: p is its length field (4 bytes, still encrypted),
+ * then len bytes of body, then the check sum. 1 = genuine, and the body is
+ * now in clear; 0 = damaged or forged; -1 = not asked, do it here. */
+int copro_open(u32 seq, const u8 *key64, u8 *p, u32 len)
+{
+    int r;
+
+    if (!packets_here(len))
+        return -1;
+    packet_head(seq, key64);
+    memcpy(buf + SSHOS_PACKET_HEAD, p, 4 + len + 16);
+    r = ask(SSHOS_OPEN, SSHOS_PACKET_HEAD + 4 + len + 16, 1 + len);
+    if (r != 0) {
+        /* refused, or a forgery: then only two bytes came back */
+        r = (buf[0] == 1 && buf[1] == 0) ? 0 : -1;
+    } else {
+        memcpy(p + 4, buf + 2, len);
+        r = 1;
+        if (!packets_noted) {
+            packets_noted = 1;
+            note("packets go through the BlueSCSI");
+        }
+    }
+    wipe();
+    return r;
+}
+
+/* A packet to send: p is its length field and total bytes of body, in
+ * clear, with room for the check sum after. 0 = it is encrypted and has
+ * its check sum; -1 = not asked, do it here. */
+int copro_seal(u32 seq, const u8 *key64, u8 *p, u32 total)
+{
+    int r;
+
+    if (!packets_here(total))
+        return -1;
+    packet_head(seq, key64);
+    memcpy(buf + SSHOS_PACKET_HEAD, p, 4 + total);
+    r = ask(SSHOS_SEAL, SSHOS_PACKET_HEAD + 4 + total, 4 + total + 16);
+    if (r == 0)
+        memcpy(p, buf + 1, 4 + total + 16);
     wipe();
     return r;
 }

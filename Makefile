@@ -296,7 +296,7 @@ test-fw-host: | $(B)
 	cc -std=gnu11 -g -O1 -Wall -Wextra -fsanitize=address,undefined \
 		-fno-sanitize-recover=undefined -include tests/host_types.h -Ikernel \
 		-o $(B)/fw_host tests/fw_host.c firmware/sshos_crypto.c \
-		kernel/x25519.c kernel/ed25519.c kernel/sha512.c
+		kernel/x25519.c kernel/ed25519.c kernel/sha512.c kernel/poly1305.c
 	$(B)/fw_host
 
 run: $(B)/sshos-800k.dsk
@@ -407,12 +407,15 @@ test-copro:
 	trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
 	"$(JUANRUN)" --rom "$(ROM)" --floppy build-copro/sshos-800k.dsk --net 4 \
 		--until SSHOS-BOOT-OK --cycles 3500000000 --prompt '> ' --prompt 'ready>' \
-		--type 'ssh\necho result-$$((6*7))\nexit\n\puptime\n' \
+		--type 'ssh\necho result-$$((6*7))\nseq 1 400\necho after-$$((7*7))\nexit\n\puptime\n' \
 		--done 'stray interrupts' --out build-copro/test
-	@sed -n '/^> ssh/,$$p' build-copro/test.serial.txt
+	@sed -n '/^> ssh/,$$p' build-copro/test.serial.txt | grep -a -v '^[0-9]*$$'
 	@grep -q 'COPRO: the BlueSCSI does the sums' build-copro/test.serial.txt
 	@test "$$(grep -c 'COPRO: a sum done by the BlueSCSI' build-copro/test.serial.txt)" = 4
+	@grep -q 'COPRO: packets go through the BlueSCSI' build-copro/test.serial.txt
 	@grep -q '^result-42' build-copro/test.serial.txt
+	@grep -q '^400' build-copro/test.serial.txt
+	@grep -q '^after-49' build-copro/test.serial.txt
 	@grep -q 'Accepted publickey' build-copro/sshd.log
 	@echo "Hand-off test passed."
 

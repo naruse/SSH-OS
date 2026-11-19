@@ -205,12 +205,15 @@ static int packet_send(void)
     rng_bytes(tx + 5 + tx_len, pad);
     n = 4 + total;
     if (ssh.enc_out) {
-        make_nonce(nonce, ssh.seq_out);
-        chacha20(ssh.key_out + 32, nonce, 0, tx, 4);
-        memset(polykey, 0, sizeof polykey);
-        chacha20(ssh.key_out, nonce, 0, polykey, sizeof polykey);
-        chacha20(ssh.key_out, nonce, 1, tx + 4, total);
-        poly1305(tx + n, polykey, tx, n);
+        /* by the BlueSCSI if it can and the packet is worth the trip */
+        if (copro_seal(ssh.seq_out, ssh.key_out, tx, total) != 0) {
+            make_nonce(nonce, ssh.seq_out);
+            chacha20(ssh.key_out + 32, nonce, 0, tx, 4);
+            memset(polykey, 0, sizeof polykey);
+            chacha20(ssh.key_out, nonce, 0, polykey, sizeof polykey);
+            chacha20(ssh.key_out, nonce, 1, tx + 4, total);
+            poly1305(tx + n, polykey, tx, n);
+        }
         n += 16;
     }
     ssh.seq_out++;
@@ -331,15 +334,21 @@ static int packet_poll(void)
         }
         len = ssh.rx_len;
         if (ssh.enc_in) {
-            memset(polykey, 0, sizeof polykey);
-            chacha20(ssh.key_in, nonce, 0, polykey, sizeof polykey);
-            poly1305(tag, polykey, rx, 4 + len);
-            diff = 0;
-            for (i = 0; i < 16; i++)
-                diff |= tag[i] ^ rx[4 + len + i];
-            if (diff)
+            /* by the BlueSCSI if it can and the packet is worth the trip */
+            i = copro_open(ssh.seq_in, ssh.key_in, rx, len);
+            if (i == 0)
                 return fail("a packet arrived damaged or forged (check sum wrong)");
-            chacha20(ssh.key_in, nonce, 1, rx + 4, len);
+            if (i < 0) {
+                memset(polykey, 0, sizeof polykey);
+                chacha20(ssh.key_in, nonce, 0, polykey, sizeof polykey);
+                poly1305(tag, polykey, rx, 4 + len);
+                diff = 0;
+                for (i = 0; i < 16; i++)
+                    diff |= tag[i] ^ rx[4 + len + i];
+                if (diff)
+                    return fail("a packet arrived damaged or forged (check sum wrong)");
+                chacha20(ssh.key_in, nonce, 1, rx + 4, len);
+            }
         }
         pad = rx[4];
         if (pad + 2 > len)

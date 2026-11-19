@@ -80,6 +80,52 @@ int main(void)
     n = sshos_crypto_result(out, sizeof out);
     check("an unknown request is refused", n == 1 && out[0] == 0);
 
+    /* A packet both ways, against the same steps done one by one as SSH OS
+     * does them itself (kernel/ssh.c): the two must agree to the byte. */
+    {
+        static unsigned char key[64], plain[4 + 600], mine[4 + 600 + 16], req[SSHOS_CRYPTO_MAX];
+        static unsigned char back[SSHOS_CRYPTO_MAX];
+        unsigned char nonce[12] = {0}, polykey[32] = {0};
+        unsigned int total = 600, i, seq = 0x01020304;
+
+        for (i = 0; i < 64; i++)
+            key[i] = (unsigned char)(i * 7 + 3);
+        plain[0] = 0; plain[1] = 0; plain[2] = (unsigned char)(total >> 8); plain[3] = (unsigned char)total;
+        for (i = 0; i < total; i++)
+            plain[4 + i] = (unsigned char)(i * 13 + 1);
+        nonce[8] = 1; nonce[9] = 2; nonce[10] = 3; nonce[11] = 4;
+        memcpy(mine, plain, 4 + total);
+        chacha20(key + 32, nonce, 0, mine, 4);
+        chacha20(key, nonce, 0, polykey, 32);
+        chacha20(key, nonce, 1, mine + 4, total);
+        poly1305(mine + 4 + total, polykey, mine, 4 + total);
+
+        req[0] = 1; req[1] = 2; req[2] = 3; req[3] = 4;
+        (void)seq;
+        memcpy(req + 4, key, 64);
+        memcpy(req + SSHOS_PACKET_HEAD, plain, 4 + total);
+        sshos_crypto_job(SSHOS_SEAL, req, SSHOS_PACKET_HEAD + 4 + total);
+        n = sshos_crypto_result(back, sizeof back);
+        check("a packet sealed", n == 1 + 4 + total + 16 && back[0] == 1 &&
+              memcmp(back + 1, mine, 4 + total + 16) == 0);
+
+        memcpy(req + SSHOS_PACKET_HEAD, mine, 4 + total + 16);
+        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
+        n = sshos_crypto_result(back, sizeof back);
+        check("a packet opened", n == 2 + total && back[0] == 1 && back[1] == 1 &&
+              memcmp(back + 2, plain + 4, total) == 0);
+
+        req[SSHOS_PACKET_HEAD + 100] ^= 1;
+        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
+        n = sshos_crypto_result(back, sizeof back);
+        check("a damaged packet is refused, and nothing of it given out",
+              n == 2 && back[0] == 1 && back[1] == 0);
+
+        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 10);
+        n = sshos_crypto_result(back, sizeof back);
+        check("a packet too short to be one is refused", n == 1 && back[0] == 0);
+    }
+
     printf(failures ? "FAILED\n" : "All right.\n");
     return failures != 0;
 }

@@ -3,7 +3,7 @@
 
     prepare.py BLUESCSI-SOURCE-DIRECTORY
 
-Copies the arithmetic (kernel/x25519.c, ed25519.c, sha512.c) and the
+Copies the arithmetic (kernel/x25519.c, ed25519.c, sha512.c, poly1305.c) and the
 request handler (firmware/sshos_crypto.c) into lib/SSHOS of that source
 tree, and applies firmware/bluescsi.patch, which makes the network adapter
 answer SCSI command 0x1D and adds the new files to the build. After that
@@ -44,14 +44,14 @@ def main():
         raise SystemExit("%s does not look like the BlueSCSI-v2 source" % tree)
     dest = os.path.join(tree, "lib", "SSHOS")
     os.makedirs(dest, exist_ok=True)
-    for name in ("x25519.c", "ed25519.c", "sha512.c", "fe25519.h", "kernel.h", "types.h"):
+    for name in ("x25519.c", "ed25519.c", "sha512.c", "poly1305.c", "fe25519.h", "kernel.h", "types.h"):
         shutil.copy(os.path.join(ROOT, "kernel", name), dest)
     for name in ("sshos_crypto.c", "sshos_crypto.h"):
         shutil.copy(os.path.join(HERE, name), dest)
     with open(os.path.join(dest, "sshos_types.h"), "w") as f:
         f.write(TYPES)
     # one small file for each source, so that it is compiled with our types
-    for name in ("x25519", "ed25519", "sha512"):
+    for name in ("x25519", "ed25519", "sha512", "poly1305"):
         with open(os.path.join(dest, "w_%s.c" % name), "w") as f:
             f.write('#include "sshos_types.h"\n#include "%s.c"\n' % name)
     subprocess.run(["git", "apply", os.path.join(HERE, "bluescsi.patch")], cwd=tree, check=True)

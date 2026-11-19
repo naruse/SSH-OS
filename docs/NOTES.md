@@ -52,8 +52,9 @@ keyboard and mouse would need their own driver.
 
 ## Not done
 
-- The BlueSCSI doing SSH's slow sums, which would take connecting from a
-  minute to a few seconds: both sides are written and tested against each
+- The BlueSCSI doing SSH's slow sums and its packets, which would take
+  connecting from a minute to a few seconds and lift the 7 KB a second of
+  a session: both sides are written and tested against each
   other on this side of the cable ([firmware/](../firmware/README.md)), but
   the firmware has not been built or run on a real BlueSCSI yet.
 - SSH:
