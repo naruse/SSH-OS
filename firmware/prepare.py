@@ -53,7 +53,9 @@ def main():
     # one small file for each source, so that it is compiled with our types
     for name in ("x25519", "ed25519", "sha512", "poly1305"):
         with open(os.path.join(dest, "w_%s.c" % name), "w") as f:
-            f.write('#include "sshos_types.h"\n#include "%s.c"\n' % name)
+            # the signature sums keep their tables in memory the firmware lends
+            f.write('#include "sshos_types.h"\n%s#include "%s.c"\n'
+                    % ("#define SSHOS_SCRATCH\n" if name == "ed25519" else "", name))
     subprocess.run(["git", "apply", os.path.join(HERE, "bluescsi.patch")], cwd=tree, check=True)
     print("SSH OS's crypto hand-off is in %s; now build the firmware as its BUILDING.md says." % tree)
 

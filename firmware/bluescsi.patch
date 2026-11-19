@@ -1,12 +1,12 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9d973b4..98d89be 100644
+index 9d973b4..b9e1c3c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -149,6 +149,12 @@ set(SCSI2SD_SOURCES
      lib/SCSI2SD/src/firmware/floppy.c
      lib/SCSI2SD/src/firmware/mo.c
      lib/SCSI2SD/src/firmware/AmigaWIFI/AmigaWIFI.c
-+    # SSH OS: the sums of an SSH log-in for a Macintosh (see lib/SSHOS)
++    # SSH OS: the sums and packets of SSH for a Macintosh (see lib/SSHOS)
 +    lib/SSHOS/sshos_crypto.c
 +    lib/SSHOS/w_x25519.c
 +    lib/SSHOS/w_ed25519.c
@@ -15,8 +15,23 @@ index 9d973b4..98d89be 100644
  )
  
  # External dependencies fetched from GitHub
+diff --git a/lib/BlueSCSI_platform_RP2MCU/rp2040-template.ld b/lib/BlueSCSI_platform_RP2MCU/rp2040-template.ld
+index 64ebb26..5dbc043 100644
+--- a/lib/BlueSCSI_platform_RP2MCU/rp2040-template.ld
++++ b/lib/BlueSCSI_platform_RP2MCU/rp2040-template.ld
+@@ -113,6 +113,10 @@ SECTIONS
+          * Only AmigaWIFI command parsing (init-time only) goes to FLASH. */
+         *AmigaWIFI*(.text .text*)
+ 
++        /* SSH OS's crypto (lib/SSHOS) is asked for a few times a second at
++         * most: FLASH, to leave RAM alone. */
++        *SSHOS*(.text .text*)
++
+         /* C++ constructors and destructors */
+         *(.text*_ZN*C1*)
+         *(.text*_ZN*C2*)
 diff --git a/lib/SCSI2SD/src/firmware/network.c b/lib/SCSI2SD/src/firmware/network.c
-index e15501f..4f23fdf 100644
+index e15501f..e08e46e 100644
 --- a/lib/SCSI2SD/src/firmware/network.c
 +++ b/lib/SCSI2SD/src/firmware/network.c
 @@ -22,6 +22,7 @@
@@ -27,13 +42,29 @@ index e15501f..4f23fdf 100644
  
  extern int platform_network_send(uint8_t *buf, size_t len);
  
-@@ -455,6 +456,37 @@ int scsiNetworkCommand()
+@@ -214,6 +215,12 @@ void scsiNetworkWifiJoin(uint32_t size)
+ 	scsiDev.phase = STATUS;
+ }
+ 
++// SSH OS: the answer to its last request waits in scsiDev.data to be read.
++// How long it is, and a check sum, in case another command used the buffer
++// in between: then the answer is gone and SSH OS is told so.
++static uint32_t sshosAnswerLen;
++static uint32_t sshosAnswerCrc;
++
+ int scsiNetworkCommand()
+ {
+ 	int parityError, done, idx, total;
+@@ -455,6 +462,47 @@ int scsiNetworkCommand()
  		// set mode (ignored)
  		break;
  
-+	// SSH OS (github.com/naruse/SSH-OS): the slow sums of an SSH log-in, done
-+	// here for a Macintosh whose 68000 would take a quarter of a minute each.
-+	// One opcode, the request in cdb[1]; see lib/SSHOS/sshos_crypto.c.
++	// SSH OS (github.com/naruse/SSH-OS): the slow sums of an SSH log-in and the
++	// packets of a session, done here for a Macintosh whose 68000 would take
++	// a quarter of a minute over each sum. One opcode, the request in cdb[1];
++	// see lib/SSHOS/sshos_crypto.c. The work is done in scsiDev.data, where
++	// the request arrived, and the tables it needs go in that buffer's far
++	// half: there is no other memory to spare.
 +	case SSHOS_CRYPTO_CMD:
 +		if (scsiDev.cdb[1] == SSHOS_HELLO)
 +		{
@@ -42,7 +73,13 @@ index e15501f..4f23fdf 100644
 +		}
 +		else if (scsiDev.cdb[1] == SSHOS_RESULT)
 +		{
-+			scsiDev.dataLen = sshos_crypto_result(scsiDev.data, size);
++			if (sshosAnswerLen == 0 || crc32(scsiDev.data, sshosAnswerLen) != sshosAnswerCrc)
++			{
++				scsiDev.data[0] = 0;	// nothing to give: refused
++				sshosAnswerLen = 1;
++			}
++			scsiDev.dataLen = sshosAnswerLen < size ? sshosAnswerLen : size;
++			sshosAnswerLen = 0;
 +			scsiDev.phase = DATA_IN;
 +		}
 +		else if (size == 0 || size > SSHOS_CRYPTO_MAX)
@@ -55,8 +92,9 @@ index e15501f..4f23fdf 100644
 +			parityError = 0;
 +			scsiEnterPhase(DATA_OUT);
 +			scsiRead(scsiDev.data, size, &parityError);
-+			sshos_crypto_job(scsiDev.cdb[1], scsiDev.data, size);
-+			memset(scsiDev.data, 0, size);		// it may have held a secret
++			sshos_scratch = scsiDev.data + sizeof(scsiDev.data) / 2;
++			sshosAnswerLen = sshos_crypto_job(scsiDev.cdb[1], scsiDev.data, size, SSHOS_CRYPTO_MAX);
++			sshosAnswerCrc = crc32(scsiDev.data, sshosAnswerLen);
 +			scsiDev.status = GOOD;
 +			scsiDev.phase = STATUS;
 +		}

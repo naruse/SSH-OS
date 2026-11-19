@@ -10,13 +10,14 @@ Once logged in, every packet is encrypted and carries a check sum, and the
 seals packets too. SSH OS sends it the ones of 256 bytes and more; a key
 press is quicker done at home than sent down the cable and back.
 
-**Status: not yet run on a real BlueSCSI.** What is checked: the code on
-the firmware's side gives the published answers when built for an ordinary
-computer and agrees to the byte with what SSH OS does itself (`make
-test-fw-host`), and SSH OS logs in to a real server and holds a session
-there, every sum and every packet going through the same requests and
-answers with that code standing in for the BlueSCSI (`make test-copro`). Not checked: that it builds into the firmware, and
-that it works over the cable.
+**Status: it builds into the firmware; not yet run on a real BlueSCSI.**
+What is checked: the code on the firmware's side gives the published
+answers when built for an ordinary computer and agrees to the byte with
+what SSH OS does itself (`make test-fw-host`); SSH OS logs in to a real
+server and holds a session there, every sum and every packet going through
+the same requests and answers with that code standing in for the BlueSCSI
+(`make test-copro`); and the BlueSCSI firmware for the Pico W builds with
+it. Not checked: that it works over the cable, and how much quicker it is.
 
 SSH OS asks whether the BlueSCSI can do this each time it starts, and does
 the sums itself if not. So the same SSH OS runs with the firmware as it
@@ -57,9 +58,17 @@ git clone https://github.com/BlueSCSI/BlueSCSI-v2.git
 python3 firmware/prepare.py BlueSCSI-v2
 ```
 
-Then build as the BlueSCSI's own `BUILDING.md` says, and flash the result
-over USB. `prepare.py` copies the files into `lib/SSHOS` and applies
+Then build as the BlueSCSI's own `BUILDING.md` says (target
+`Pico_DaynaPORT` for a BlueSCSI v2 with a Pico W), and flash the `.uf2` over
+USB. `prepare.py` copies the files into `lib/SSHOS` and applies
 `bluescsi.patch`, made against BlueSCSI-v2 commit `5e64e3b`.
+
+The firmware has about 9 KB of memory free and keeps most of its code in
+RAM, so the addition takes none of either: it works in the buffer the
+request arrived in, borrows the far half of that buffer for the signature
+sums' tables, and is linked into flash. What it does use is stack, a few
+kilobytes at the deepest; whether that is safe is one of the things to
+watch on the first run.
 
 The private key and the one-time secrets cross the SCSI cable to the
 BlueSCSI in the clear. Both ends are in the same machine.

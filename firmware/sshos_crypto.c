@@ -35,7 +35,12 @@
  * The arithmetic is SSH OS's own (kernel/x25519.c, ed25519.c, sha512.c),
  * the same files the SE runs and the tests check; nothing here depends on
  * the BlueSCSI. In the firmware, network.c hands command 0x1D to
- * sshos_crypto_job() and sshos_crypto_result().
+ * sshos_crypto_job(), which works in the buffer the request arrived in and
+ * leaves the answer there: the firmware has some 9 KB of memory free, and
+ * none of it to spare for a buffer of our own. For the same reason the
+ * tables of the signature sums (4 KB) go into memory the firmware lends,
+ * sshos_scratch, and the code itself is linked into flash, not into RAM
+ * where the firmware keeps what must be quick.
  *
  * The same file is built into SSH OS itself with -DCOPRO_FAKE, where it
  * stands in for the BlueSCSI so that the hand-off can be tested in the
@@ -43,108 +48,121 @@
  */
 #include "sshos_crypto.h"
 
-static unsigned char answer[SSHOS_CRYPTO_MAX];
-static unsigned int answer_len;
+/* 4 KB of memory, at an even address, for the signature sums' tables; set
+ * before a request of that kind. Only looked at where the arithmetic is
+ * built with SSHOS_SCRATCH. */
+unsigned char *sshos_scratch;
 
-/* One packet either way. in: number (4), key (64), packet. */
-static void packet(int seal, const unsigned char *in, unsigned int len)
+static void move(unsigned char *to, const unsigned char *from, unsigned int n)
 {
-    const unsigned char *key = in + 4, *p = in + SSHOS_PACKET_HEAD;
+    while (n--)                 /* to lies below from wherever they overlap */
+        *to++ = *from++;
+}
+
+/* One packet either way. buf: number (4), key (64), packet. Returns the
+ * length of the answer, left at the start of buf. */
+static unsigned int packet(int seal, unsigned char *buf, unsigned int len, unsigned int room)
+{
+    unsigned char *key = buf + 4, *p = buf + SSHOS_PACKET_HEAD;
     unsigned char nonce[12], polykey[32], tag[16], diff = 0;
     unsigned int n, i;
 
-    if (len < SSHOS_PACKET_HEAD + 4 + (seal ? 0 : 16))
-        return;
+    if (len < SSHOS_PACKET_HEAD + 4 + (seal ? 0 : 16)) {
+        buf[0] = 0;
+        return 1;
+    }
     n = len - SSHOS_PACKET_HEAD - (seal ? 0 : 16);      /* the length and the body */
-    if (n + 18 > sizeof answer)
-        return;
     for (i = 0; i < 8; i++)
         nonce[i] = 0;
     for (i = 0; i < 4; i++)
-        nonce[8 + i] = in[i];
+        nonce[8 + i] = buf[i];
     for (i = 0; i < 32; i++)
         polykey[i] = 0;
     chacha20(key, nonce, 0, polykey, 32);
     if (seal) {
-        unsigned char *out = answer + 1;
-
-        for (i = 0; i < n; i++)
-            out[i] = p[i];
-        chacha20(key + 32, nonce, 0, out, 4);
-        chacha20(key, nonce, 1, out + 4, n - 4);
-        poly1305(out + n, polykey, out, n);
-        answer_len = 1 + n + 16;
+        if (1 + n + 16 > room) {
+            buf[0] = 0;
+            return 1;
+        }
+        chacha20(key + 32, nonce, 0, p, 4);
+        chacha20(key, nonce, 1, p + 4, n - 4);
+        poly1305(tag, polykey, p, n);
+        move(buf + 1, p, n);            /* over the key, which has done its work */
+        move(buf + 1 + n, tag, 16);
+        n = 1 + n + 16;
     } else {
         poly1305(tag, polykey, p, n);
         for (i = 0; i < 16; i++)
             diff |= (unsigned char)(tag[i] ^ p[n + i]);
-        answer[1] = (unsigned char)(diff == 0);
-        answer_len = 2;
         if (!diff) {
-            for (i = 4; i < n; i++)
-                answer[2 + i - 4] = p[i];
-            chacha20(key, nonce, 1, answer + 2, n - 4);
-            answer_len = 2 + n - 4;
+            chacha20(key, nonce, 1, p + 4, n - 4);
+            move(buf + 2, p + 4, n - 4);
+            n = 2 + n - 4;
+        } else {
+            for (i = 0; i < len; i++)   /* a forgery: none of it goes back */
+                buf[i] = 0;
+            n = 2;
         }
+        buf[1] = (unsigned char)(diff == 0);
     }
     for (i = 0; i < 32; i++)
         polykey[i] = 0;
-    answer[0] = 1;
+    buf[0] = 1;
+    return n;
 }
 
-/* Take one request. in/len is what the Macintosh wrote. */
-void sshos_crypto_job(unsigned char request, const unsigned char *in, unsigned int len)
+/* Do one request. buf holds what the Macintosh wrote (len bytes) and has
+ * room bytes in all; the answer is left in it, and its length returned:
+ * first a byte, 1 = done or 0 = refused, then what the list above says. */
+unsigned int sshos_crypto_job(unsigned char request, unsigned char *buf, unsigned int len,
+                              unsigned int room)
 {
-    answer[0] = 0;
-    answer_len = 1;
+    unsigned char out[64];
+    unsigned int n = 0, i;
+
+    if (len > room || room < 1 + 64) {
+        if (room)
+            buf[0] = 0;
+        return room ? 1 : 0;
+    }
     switch (request) {
     case SSHOS_X25519:
         if (len != 64)
-            return;
-        x25519(answer + 1, in, in + 32);
-        answer_len = 1 + 32;
+            break;
+        x25519(out, buf, buf + 32);
+        n = 32;
         break;
     case SSHOS_PUBLIC:
         if (len != 32)
-            return;
-        ed25519_public(answer + 1, in);
-        answer_len = 1 + 32;
+            break;
+        ed25519_public(out, buf);
+        n = 32;
         break;
     case SSHOS_SIGN:
         if (len < 64)
-            return;
-        ed25519_sign(answer + 1, in + 64, len - 64, in, in + 32);
-        answer_len = 1 + 64;
+            break;
+        ed25519_sign(out, buf + 64, len - 64, buf, buf + 32);
+        n = 64;
         break;
     case SSHOS_VERIFY:
         if (len < 96)
-            return;
-        answer[1] = (unsigned char)(ed25519_verify(in, in + 96, len - 96, in + 64) == 1);
-        answer_len = 1 + 1;
+            break;
+        out[0] = (unsigned char)(ed25519_verify(buf, buf + 96, len - 96, buf + 64) == 1);
+        n = 1;
         break;
     case SSHOS_OPEN:
-        packet(0, in, len);
-        return;
+        return packet(0, buf, len, room);
     case SSHOS_SEAL:
-        packet(1, in, len);
-        return;
-    default:
-        return;
+        return packet(1, buf, len, room);
     }
-    answer[0] = 1;
-}
-
-/* Hand over the answer to the request before; returns its length. */
-unsigned int sshos_crypto_result(unsigned char *out, unsigned int max)
-{
-    unsigned int n = answer_len < max ? answer_len : max, i;
-
+    for (i = 0; i < len; i++)           /* what was asked may have held a secret */
+        buf[i] = 0;
+    buf[0] = (unsigned char)(n != 0);
     for (i = 0; i < n; i++) {
-        out[i] = answer[i];
-        answer[i] = 0;          /* it may be a secret: it is given out once */
+        buf[1 + i] = out[i];
+        out[i] = 0;
     }
-    answer_len = 1;
-    return n;
+    return 1 + n;
 }
 
 /* The eight bytes of HELLO. */

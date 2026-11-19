@@ -15,9 +15,11 @@
 #define SSHOS_CRYPTO_MAX        4608    /* the most one request may write, or get back */
 #define SSHOS_PACKET_HEAD       68      /* before a packet: its number (4), the key (64) */
 
-void sshos_crypto_job(unsigned char request, const unsigned char *in, unsigned int len);
-unsigned int sshos_crypto_result(unsigned char *out, unsigned int max);
+unsigned int sshos_crypto_job(unsigned char request, unsigned char *buf, unsigned int len,
+                              unsigned int room);
 unsigned int sshos_crypto_hello(unsigned char *out);
+extern unsigned char *sshos_scratch;    /* 4 KB lent for the signature sums' tables */
+#define SSHOS_SCRATCH_SIZE      4096
 
 /* SSH OS's own arithmetic (kernel/x25519.c, ed25519.c) */
 #ifndef SSHOS_KERNEL

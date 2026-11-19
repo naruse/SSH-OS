@@ -30,15 +30,22 @@ static void note(const char *s)
  * bytes each way, without the cable. Nothing is quicker for it, of course. */
 #include "../firmware/sshos_crypto.c"
 
+static u8 theirs[SSHOS_CRYPTO_MAX];     /* the BlueSCSI's buffer */
+static u32 theirs_len;
+
 static int command(u8 request, u8 dir, u32 len, u32 *moved)
 {
     (void)dir;
-    if (request == SSHOS_HELLO)
+    if (request == SSHOS_HELLO) {
         *moved = sshos_crypto_hello(buf);
-    else if (request == SSHOS_RESULT)
-        *moved = sshos_crypto_result(buf, len);
-    else {
-        sshos_crypto_job(request, buf, len);
+    } else if (request == SSHOS_RESULT) {
+        *moved = theirs_len < len ? theirs_len : len;
+        memcpy(buf, theirs, *moved);
+        memset(theirs, 0, sizeof theirs);
+        theirs_len = 0;
+    } else {
+        memcpy(theirs, buf, len);
+        theirs_len = sshos_crypto_job(request, theirs, len, sizeof theirs);
         *moved = len;
     }
     return 0;

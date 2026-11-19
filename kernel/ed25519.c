@@ -248,8 +248,16 @@ static int ge_frombytes(struct ge *p, const u8 *in)
     return 1;
 }
 
-/* The multiples 0..15 of the two points being multiplied. */
+/* The multiples 0..15 of the two points being multiplied: 4 KB. Built into
+ * the BlueSCSI's firmware (firmware/), which has no memory to spare, they
+ * live in a buffer the firmware lends instead. */
+#ifdef SSHOS_SCRATCH
+extern unsigned char *sshos_scratch;
+#define table_a ((struct ge *)(void *)sshos_scratch)
+#define table_b (table_a + 16)
+#else
 static struct ge table_a[16], table_b[16];
+#endif
 
 static void make_table(struct ge *table, const struct ge *p)
 {
@@ -306,7 +314,7 @@ static void ge_multiply(struct ge *r, const u8 *a, const struct ge *A, const u8 
         if (crypto_stop)
             break;
     }
-    memset(table_a, 0, sizeof table_a);     /* they may describe a secret */
+    memset(table_a, 0, 16 * sizeof(struct ge));     /* they may describe a secret */
 }
 
 /* --------------------------------------------- numbers modulo the order L -- */

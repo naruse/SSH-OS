@@ -295,7 +295,7 @@ test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-
 test-fw-host: | $(B)
 	cc -std=gnu11 -g -O1 -Wall -Wextra -fsanitize=address,undefined \
 		-fno-sanitize-recover=undefined -include tests/host_types.h -Ikernel \
-		-o $(B)/fw_host tests/fw_host.c firmware/sshos_crypto.c \
+		-DSSHOS_SCRATCH -o $(B)/fw_host tests/fw_host.c firmware/sshos_crypto.c \
 		kernel/x25519.c kernel/ed25519.c kernel/sha512.c kernel/poly1305.c
 	$(B)/fw_host
 

@@ -7,6 +7,26 @@
 #include "../firmware/sshos_crypto.h"
 
 static int failures;
+static unsigned char work[SSHOS_CRYPTO_MAX], scratch[SSHOS_SCRATCH_SIZE];
+static unsigned int work_len;
+
+/* As the firmware does: the request is done in the buffer it arrived in,
+ * and the answer read from there afterwards, once. */
+static void job(unsigned char request, const unsigned char *in, unsigned int len)
+{
+    memcpy(work, in, len);
+    sshos_scratch = scratch;
+    work_len = sshos_crypto_job(request, work, len, sizeof work);
+}
+
+static unsigned int result(unsigned char *out, unsigned int max)
+{
+    unsigned int n = work_len < max ? work_len : max;
+
+    memcpy(out, work, n);
+    work_len = 0;
+    return n;
+}
 
 static void check(const char *what, int ok)
 {
@@ -39,11 +59,10 @@ int main(void)
     unhex(in, "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4");
     unhex(in + 32, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c");
     unhex(want, "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552");
-    sshos_crypto_job(SSHOS_X25519, in, 64);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_X25519, in, 64);
+    n = result(out, sizeof out);
     check("x25519", n == 33 && out[0] == 1 && memcmp(out + 1, want, 32) == 0);
-    n = sshos_crypto_result(out, sizeof out);
-    check("an answer is given out once", n == 1 && out[0] == 0);
+    check("the request is wiped from the buffer", work[40] == 0 && work[63] == 0);
 
     /* RFC 8032, section 7.1, test 2: a message of one byte */
     unhex(seed, "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb");
@@ -51,33 +70,33 @@ int main(void)
     unhex(want, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da"
                 "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00");
     memcpy(in, seed, 32);
-    sshos_crypto_job(SSHOS_PUBLIC, in, 32);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_PUBLIC, in, 32);
+    n = result(out, sizeof out);
     check("public key", n == 33 && out[0] == 1 && memcmp(out + 1, pub, 32) == 0);
 
     memcpy(in, seed, 32);
     memcpy(in + 32, pub, 32);
     in[64] = 0x72;
-    sshos_crypto_job(SSHOS_SIGN, in, 65);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_SIGN, in, 65);
+    n = result(out, sizeof out);
     check("signature", n == 65 && out[0] == 1 && memcmp(out + 1, want, 64) == 0);
 
     memcpy(in, want, 64);
     memcpy(in + 64, pub, 32);
     in[96] = 0x72;
-    sshos_crypto_job(SSHOS_VERIFY, in, 97);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_VERIFY, in, 97);
+    n = result(out, sizeof out);
     check("a genuine signature passes", n == 2 && out[0] == 1 && out[1] == 1);
     in[96] = 0x73;
-    sshos_crypto_job(SSHOS_VERIFY, in, 97);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_VERIFY, in, 97);
+    n = result(out, sizeof out);
     check("a forged one does not", n == 2 && out[0] == 1 && out[1] == 0);
 
-    sshos_crypto_job(SSHOS_X25519, in, 63);
-    n = sshos_crypto_result(out, sizeof out);
+    job(SSHOS_X25519, in, 63);
+    n = result(out, sizeof out);
     check("a short request is refused", n == 1 && out[0] == 0);
-    sshos_crypto_job(0x55, in, 64);
-    n = sshos_crypto_result(out, sizeof out);
+    job(0x55, in, 64);
+    n = result(out, sizeof out);
     check("an unknown request is refused", n == 1 && out[0] == 0);
 
     /* A packet both ways, against the same steps done one by one as SSH OS
@@ -104,25 +123,25 @@ int main(void)
         (void)seq;
         memcpy(req + 4, key, 64);
         memcpy(req + SSHOS_PACKET_HEAD, plain, 4 + total);
-        sshos_crypto_job(SSHOS_SEAL, req, SSHOS_PACKET_HEAD + 4 + total);
-        n = sshos_crypto_result(back, sizeof back);
+        job(SSHOS_SEAL, req, SSHOS_PACKET_HEAD + 4 + total);
+        n = result(back, sizeof back);
         check("a packet sealed", n == 1 + 4 + total + 16 && back[0] == 1 &&
               memcmp(back + 1, mine, 4 + total + 16) == 0);
 
         memcpy(req + SSHOS_PACKET_HEAD, mine, 4 + total + 16);
-        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
-        n = sshos_crypto_result(back, sizeof back);
+        job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
+        n = result(back, sizeof back);
         check("a packet opened", n == 2 + total && back[0] == 1 && back[1] == 1 &&
               memcmp(back + 2, plain + 4, total) == 0);
 
         req[SSHOS_PACKET_HEAD + 100] ^= 1;
-        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
-        n = sshos_crypto_result(back, sizeof back);
+        job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 4 + total + 16);
+        n = result(back, sizeof back);
         check("a damaged packet is refused, and nothing of it given out",
               n == 2 && back[0] == 1 && back[1] == 0);
 
-        sshos_crypto_job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 10);
-        n = sshos_crypto_result(back, sizeof back);
+        job(SSHOS_OPEN, req, SSHOS_PACKET_HEAD + 10);
+        n = result(back, sizeof back);
         check("a packet too short to be one is refused", n == 1 && back[0] == 0);
     }
 
