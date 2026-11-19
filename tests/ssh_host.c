@@ -40,6 +40,7 @@ const u32 config_text_len = 0;
 
 volatile u32 ticks;
 volatile u8 kbd_escape;
+u8 kbd_option_meta;
 int (*net_abort_check)(void);
 static int sock = -1;
 static int closed_by_peer;

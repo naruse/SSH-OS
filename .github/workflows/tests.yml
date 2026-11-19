@@ -28,7 +28,7 @@ jobs:
       - name: Tests built for this computer
         run: |
           for t in test-net-host test-misc-host test-crypto-host test-vt-host \
-                   test-fs-host test-helper test-ssh-host; do
+                   test-fs-host test-vt-model test-ssh-host; do
             echo "::group::$t"
             make "$t"
             echo "::endgroup::"
@@ -72,7 +72,7 @@ jobs:
           # the settings built into the kernel are not rebuilt when only the
           # test changes: touch them between one test and the next
           for t in test test-hdboot test-crash test-scsi test-net test-tcp test-ssh \
-                   test-disk test-desk test-wifi test-term test-ownkey; do
+                   test-disk test-desk test-wifi test-ownkey; do
             echo "::group::$t"
             touch kernel/cfgdata.S
             make "$t"

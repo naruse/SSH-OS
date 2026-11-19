@@ -2,7 +2,7 @@
 
 It is compiled for this computer (tests/vt_host.c) and fed what programs
 send. Some cases state what must come out; the rest compare it, order by
-order, with the other terminal in this project (tools/juanterm/vt.py), which
+order, with the other terminal in this project (tools/model/vt.py), which
 was written separately.
 
     python3 -m unittest tests.test_vtc
@@ -15,7 +15,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from tools.juanterm.vt import Screen                            # noqa: E402
+from tools.model.vt import Screen                            # noqa: E402
 
 HOST = os.path.join(ROOT, os.environ.get("B", "build"), "vt_host")
 COLS, ROWS = 85, 32

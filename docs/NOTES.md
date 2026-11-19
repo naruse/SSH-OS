@@ -93,30 +93,6 @@ keyboard and mouse would need their own driver.
 - US keyboard layout only (accents through Option, see [typing accented letters](USING.md#typing-accented-letters)); nothing shows
   that an accent is waiting for its letter. No floppy driver.
 
-## Older parts
-
-Two programs from before the SSH client are still in the kernel and reachable
-from the OSConsole. Both use unencrypted connections and are for a home
-network only.
-
-`term` is a shell through a helper program on another computer
-(`tools/juanterm`), which did the terminal's work before the SE could.
-
-Run it on the Mac the SE should reach, with the same secret as `config.txt`:
-
-```bash
-echo 'a-long-secret-of-your-own' > ~/.juanterm-secret
-```
-
-```bash
-python3 -m tools.juanterm.server --secret-file ~/.juanterm-secret --allow 192.168.1.50
-```
-
-`--allow` is the SE's address; leave it out to accept any address that knows
-the secret. Whoever passes the check gets a shell as you. The secret itself
-never crosses the network, but what you type and see afterwards does, without
-encryption, so use this on your home network only.
-
 ## Where things are
 
 ```

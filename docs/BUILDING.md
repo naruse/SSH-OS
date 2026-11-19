@@ -115,9 +115,8 @@ make test-all
 | `test-fs-host` | The file system on this computer against a second implementation: every size, a full disk, power cuts while writing, disks that are not ours |
 | `test-scsi` | Bus scan, block read, write and read back, read speed |
 | `test-net`, `test-tcp` | Ping; a 256 KB download and a 32 KB echo with every byte checked |
-| `test-term` | The real helper and a shell, through the emulator: output, accents shown and typed, Meta |
 | `test-net-host` | The network code on this computer against a simulated network: DHCP, DNS, TCP with lost, damaged and reordered packets |
-| `test-misc-host`, `test-helper` | SHA-256, settings parser, every Option combination of the keyboard, the WiFi commands against a stand-in, the helper's screen model and encoder |
+| `test-misc-host`, `test-vt-model` | SHA-256, settings parser, every Option combination of the keyboard, the WiFi commands against a stand-in, the second terminal the kernel's is checked against |
 | `test-desk` | The home screen in the emulator: SSH OS menu, About, network panel, hardware test and back, by keys and mouse |
 | `test-wifi` | The network panel's list and joining, with a made-up WiFi adapter built in |
 | `test-crypto-host` | X25519, ChaCha20, SHA-512, Poly1305 and Ed25519 against plain Python arithmetic and the published values |

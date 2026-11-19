@@ -6,7 +6,7 @@
            for Western European languages
 
 The console font (fonts/juan6x10.txt, through tools/mkfont.py) and the
-terminal helper both take the table from here.
+tests both take the table from here.
 """
 
 EXTRA = ("─│┌┐└┘├┤┬┴┼╭╮╰╯█"

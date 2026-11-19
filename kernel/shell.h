@@ -14,7 +14,6 @@ int  shell_network_by_dhcp(void);              /* is the address to come from th
 void shell_read_line(char *line);               /* a typed line, at most 79 characters */
 
 /* term.c */
-void cmd_term(int argc, char **argv);
 
 
 /* cmd_tcp.c */

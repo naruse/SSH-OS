@@ -121,7 +121,7 @@ takes to look at every ID at start-up (that happens after the home screen is
 up).
 
 `start = shell` in `config.txt` starts at the command line instead; `ssh`
-and `term` start those programs.
+goes straight to connecting.
 
 ## SSH
 
@@ -188,8 +188,7 @@ by 32 lines. `ssh_term` in the settings changes what it calls itself.
 
 ## Typing accented letters
 
-Option works as on a Mac with the US layout, in the OSConsole, in `ssh`
-and in `term`:
+Option works as on a Mac with the US layout, in the OSConsole and in `ssh`:
 
 | Keys | Result |
 |---|---|
@@ -205,9 +204,9 @@ and in `term`:
 Capitals work the same way (Option-n, then N). Also there: ß å ø æ £ ¢ ¥ § ¶
 © ® ° ± · µ ÷ ª º ¬ • … —, on their Mac keys.
 
-In `ssh` and `term`, Option with any other key is the Meta key, so Option-b
+In `ssh`, Option with any other key is the Meta key, so Option-b
 and Option-f still move by a word; pressing Esc first works for every key.
-In `term` only, `option = meta` in `config.txt` makes Option always Meta.
+`option = meta` in `config.txt` makes Option always Meta there.
 
 ## Settings file
 

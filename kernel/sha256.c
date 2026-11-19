@@ -1,7 +1,6 @@
 /* SHA-256 and HMAC-SHA-256 (FIPS 180-4, RFC 2104).
  *
- * Used to prove to the terminal helper that this machine knows the shared
- * secret without sending the secret itself. Written for clarity, not speed:
+ * SSH's key exchange hashes with SHA-256. Written for clarity, not speed:
  * it hashes a few hundred bytes once per connection.
  */
 #include "kernel.h"

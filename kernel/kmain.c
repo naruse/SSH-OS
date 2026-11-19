@@ -49,7 +49,7 @@ void show_font(void)
     int c;
 
     /* Codes 128-159 are line drawing and symbols, 160-255 are Latin-1 (see
-     * tools/juanterm/charset.py). The samples use octal escapes for them. */
+     * tools/model/charset.py). The samples use octal escapes for them. */
     kputs("  ");
     for (c = 32; c < 256; c++) {
         if (c == 127)

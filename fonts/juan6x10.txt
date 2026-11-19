@@ -9,7 +9,7 @@
 ;; A glyph drawn 6 wide fills the whole cell instead: up to 10 rows, starting
 ;; at the cell's top row. Line drawing and accented capitals are drawn so.
 ;;
-;; Which character gets which code is in tools/juanterm/charset.py.
+;; Which character gets which code is in tools/model/charset.py.
 
 = space
 

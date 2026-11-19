@@ -145,7 +145,7 @@ void delay_ticks(u32 nticks)
 const char config_text[] =
     "# a comment\n"
     "network = dhcp\r\n"
-    "  helper=10.1.2.3:2323   \n"
+    "  server=10.1.2.3:2323   \n"
     "\n"
     "secret =  two words  # not a comment here\n"
     "broken line without equals\n"
@@ -239,25 +239,25 @@ int main(int argc, char **argv)
 
     config_init();
     CHECK(strcmp(config_get("network"), "10.0.0.2 255.0.0.0 10.0.0.1 1.1.1.1") == 0);
-    CHECK(strcmp(config_get("helper"), "10.1.2.3:2323") == 0);
+    CHECK(strcmp(config_get("server"), "10.1.2.3:2323") == 0);
     CHECK(strcmp(config_get("secret"), "two words  # not a comment here") == 0);
     CHECK(strcmp(config_get("ha"), "homeassistant.local") == 0);
     CHECK(strcmp(config_get("empty"), "") == 0);
     CHECK(strcmp(config_get("last"), "no newline at the end") == 0);
     CHECK(config_get("broken") == NULL && config_get("averyveryverylongnamethatdoesnotfit") == NULL);
     CHECK(config_get("x") == NULL);
-    CHECK(config_host_port("helper", host, sizeof host, &port, 1) == 0 &&
+    CHECK(config_host_port("server", host, sizeof host, &port, 1) == 0 &&
           strcmp(host, "10.1.2.3") == 0 && port == 2323);
     CHECK(config_host_port("ha", host, sizeof host, &port, 8123) == 0 &&
           strcmp(host, "homeassistant.local") == 0 && port == 8123);
     CHECK(config_host_port("empty", host, sizeof host, &port, 1) != 0);
     CHECK(config_host_port("nothing", host, sizeof host, &port, 1) != 0);
-    config_set("helper", "h:0");
-    CHECK(config_host_port("helper", host, sizeof host, &port, 1) != 0);
-    config_set("helper", "h:99999");
-    CHECK(config_host_port("helper", host, sizeof host, &port, 1) != 0);
-    config_set("helper", "h:12x");
-    CHECK(config_host_port("helper", host, sizeof host, &port, 1) != 0);
+    config_set("server", "h:0");
+    CHECK(config_host_port("server", host, sizeof host, &port, 1) != 0);
+    config_set("server", "h:99999");
+    CHECK(config_host_port("server", host, sizeof host, &port, 1) != 0);
+    config_set("server", "h:12x");
+    CHECK(config_host_port("server", host, sizeof host, &port, 1) != 0);
     CHECK(config_set("thisnameistoolongforit", "v") != 0);
     CHECK(config_set("wifi", "HomeNet") == 0 && config_set("wifi_key", "") == 0);
     for (i = 0; i < 40; i++) {              /* fill the table; must fail cleanly, not overflow */
@@ -278,11 +278,11 @@ int main(int argc, char **argv)
     CHECK(strcmp(stored_text, "# Settings changed on the SE. SSH OS rewrites this file.\n"
                               "ha = 10.9.8.7\nempty = now full\n") == 0);
     CHECK(config_store("thisnameistoolongforit", "v") == -1);
-    snprintf(stored_text, sizeof stored_text, "# by hand\nhelper = fromdisk:1\nempty=\n");
+    snprintf(stored_text, sizeof stored_text, "# by hand\nserver = fromdisk:1\nempty=\n");
     CHECK(config_load() == 0);
-    CHECK(strcmp(config_get("helper"), "fromdisk:1") == 0 && config_get("empty")[0] == 0);
+    CHECK(strcmp(config_get("server"), "fromdisk:1") == 0 && config_get("empty")[0] == 0);
     CHECK(config_store("ha", "x") == 0);                            /* what was loaded is kept */
-    CHECK(strstr(stored_text, "helper = fromdisk:1\n") && strstr(stored_text, "ha = x\n") &&
+    CHECK(strstr(stored_text, "server = fromdisk:1\n") && strstr(stored_text, "ha = x\n") &&
           strstr(stored_text, "empty = \n") && !strstr(stored_text, "network"));
 
     wifi_checks();

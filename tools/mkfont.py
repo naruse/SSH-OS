@@ -4,7 +4,7 @@
 Usage: mkfont.py INPUT.txt OUTPUT.c
 
 Output: font6x10[224][10], one entry per character code from 32 to 255 (see
-tools/juanterm/charset.py for which character has which code). Entry 95
+tools/model/charset.py for which character has which code). Entry 95
 (code 127) is a solid block, used for codes that have no character. Each
 byte is one row of the 6 x 10 cell with the leftmost pixel in bit 7; bits
 1-0 are unused.
@@ -12,10 +12,10 @@ byte is one row of the 6 x 10 cell with the leftmost pixel in bit 7; bits
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "juanterm"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "model"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import charset  # noqa: E402
-from juanterm import vt  # noqa: E402
+from model import vt  # noqa: E402
 
 CELL_W, CELL_H = 6, 10
 GLYPH_W, GLYPH_ROWS = 5, 9
@@ -84,14 +84,14 @@ def main():
         out.append(f"    {{{row}}},  /* {code} {label} */")
     out.append("};")
     out.append("")
-    out.append("/* The Unicode characters of codes 0x80-0x9F, from tools/juanterm/charset.py. */")
+    out.append("/* The Unicode characters of codes 0x80-0x9F, from tools/model/charset.py. */")
     out.append("const unsigned short charset_extra[32] = {")
     out.append("    " + ", ".join("0x%04X" % ord(ch) for ch in charset.EXTRA[:16]) + ",")
     out.append("    " + ", ".join("0x%04X" % ord(ch) for ch in charset.EXTRA[16:]) + ",")
     out.append("};")
     # Line drawing and blocks come in many weights (double, heavy, dashed);
     # the font has one. The nearest character of ours for each, worked out
-    # by the rules in tools/juanterm/vt.py.
+    # by the rules in tools/model/vt.py.
     box = [(vt._map_cp(cp) + (63,))[0] for cp in range(0x2500, 0x25A0)]
     out.append("")
     out.append("/* Our character for each of U+2500-U+259F (box drawing and blocks). */")

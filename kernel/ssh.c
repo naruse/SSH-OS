@@ -1664,11 +1664,14 @@ void cmd_ssh(int argc, char **argv)
             ssh_login_hook();
         /* Esc belongs to the other side now, not to our waiting calls. */
         net_abort_check = NULL;
+        setting = config_get("option");         /* "meta": Option never types accents here */
+        kbd_option_meta = setting && strcmp(setting, "meta") == 0;
         vt_reset();
         vt_log = ssh.log;
         r = session(host);
         vt_log = 0;
         vt_end();
+        kbd_option_meta = 0;
         net_abort_check = abort_check;
     }
     kbd_escape = 0;

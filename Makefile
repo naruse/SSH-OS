@@ -41,7 +41,7 @@ KFLAGS ?=
 CONFIG ?= $(if $(wildcard config.txt),config.txt,config.example.txt)
 # The tests that type commands need a disk that starts in the OSConsole, not in
 # the home screen, whatever your own settings say.
-ifneq ($(filter test test-hdboot test-scsi test-net test-tcp test-term bench test-all,$(MAKECMDGOALS)),)
+ifneq ($(filter test test-hdboot test-scsi test-net test-tcp bench test-all,$(MAKECMDGOALS)),)
 CONFIG := tests/config-prompt.txt
 endif
 
@@ -54,7 +54,7 @@ ASFLAGS := -m68000 -Wa,--register-prefix-optional
 
 KOBJS := $(addprefix $(B)/, start.o kmain.o machine.o console.o serial.o \
            kprintf.o trap.o via.o adb.o kbd.o timer.o scsi.o dayna.o net.o tcp.o \
-           config.o cfgdata.o sha256.o term.o gfx.o shell.o \
+           config.o cfgdata.o sha256.o gfx.o shell.o \
            cmd_tcp.o x25519.o sha512.o ed25519.o poly1305.o polymul.o rng.o ssh.o bench.o lib.o \
            desk.o bar.o barmenu.o snd.o wifi.o hwtest.o fs.o saved.o ask.o connect.o vt.o splash.o settings.o banner.o icons.o font6x10.o)
 
@@ -64,7 +64,7 @@ $(B):
 	mkdir -p $(B)
 
 # ---------------------------------------------------------------- kernel --
-$(B)/font6x10.c: fonts/juan6x10.txt tools/mkfont.py tools/juanterm/charset.py tools/juanterm/vt.py | $(B)
+$(B)/font6x10.c: fonts/juan6x10.txt tools/mkfont.py tools/model/charset.py tools/model/vt.py | $(B)
 	python3 tools/mkfont.py $< $@
 
 $(B)/icons.c: fonts/icons.txt tools/mkicons.py | $(B)
@@ -234,38 +234,13 @@ test-tcp: $(B)/sshos-800k.dsk
 	@grep -q 'Echoed 32768 bytes.*Every byte correct' $(B)/test-tcp.serial.txt
 	@echo "TCP test passed."
 
-# The terminal: the real helper (tools/juanterm) running /bin/sh, reached
-# through Snow's gateway. "set termlog 1" makes term copy the text it draws
-# to the serial port so the test can read it. tests/charset-sample.txt is
-# shown with cat to check accented letters and line drawing end to end. Then
-# a line with accents is typed (Option-e and so on), and Option-b is used as
-# the Meta key to go back a word.
-TEST_NET := net static 10.0.0.2 255.0.0.0 10.0.0.1\n
-test-term: $(B)/sshos-800k.dsk
-	@mkdir -p $(B)/helper-home; \
-	JUANTERM_SECRET=emulator-test-secret python3 -m tools.juanterm.server \
-		--listen 127.0.0.1 --port 2323 --env 'PS1=ready> ' --env HOME=$(B)/helper-home /bin/sh \
-		> $(B)/juanterm.log 2>&1 & pid=$$!; trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
-	"$(JUANRUN)" --rom "$(ROM)" --floppy $(B)/sshos-800k.dsk --net 4 \
-		--until SSHOS-BOOT-OK --cycles 900000000 --prompt '> ' --prompt 'ready>' \
-		--type '$(TEST_NET)set helper 127.0.0.1:2323\nset secret emulator-test-secret\nset termlog 1\nterm\necho result-$$((6*7))\ni=0; while [ $$i -lt 60 ]; do echo line-$$i; i=$$((i+1)); done\ncat tests/charset-sample.txt\n\p\s\pprintf "[%s]\\n" "\o?d\oeonde est\oea el ni\onno?"\necho abc def\obX\n\p\s\p\q\puptime\n' \
-		--done 'stray interrupts' --out $(B)/test-term
-	@echo "--- serial output (end) ---"; tail -12 $(B)/test-term.serial.txt
-	@grep -q '^result-42' $(B)/test-term.serial.txt
-	@grep -q '^line-59' $(B)/test-term.serial.txt
-	@python3 tests/check_charset.py $(B)/test-term.serial.txt
-	@python3 tests/check_text.py $(B)/test-term.serial.txt '[¿dónde está el niño?]'
-	@grep -q '^abc Xdef' $(B)/test-term.serial.txt
-	@grep -q 'Terminal ended: closed from the keyboard' $(B)/test-term.serial.txt
-	@echo "Terminal test passed."
-
-# The helper on its own: screen model, update encoder, and a session with a
-# pretend SE.
-test-helper:
-	python3 -m unittest tests.test_vt tests.test_juanterm
+# The second terminal (tools/model/vt.py), which the one in the kernel is
+# checked against: its own tests.
+test-vt-model:
+	python3 -m unittest tests.test_vt
 
 # The terminal (kernel/vt.c) compiled for this computer, checked against
-# stated cases and against the helper's separately written terminal.
+# stated cases and against that separately written terminal.
 test-vt-host: $(B)/font6x10.c | $(B)
 	cc -std=gnu11 -g -O1 -Wall -Wextra -fsanitize=address,undefined \
 		-include tests/host_types.h -o $(B)/vt_host tests/vt_host.c kernel/vt.c $(B)/font6x10.c
@@ -312,8 +287,8 @@ test-ssh-host: $(B)/font6x10.c | $(B)
 		$(addprefix kernel/, sha256.c config.c x25519.c sha512.c poly1305.c ed25519.c ssh.c saved.c vt.c)
 	python3 -m unittest tests.test_ssh
 
-test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-term test-ownkey \
-          test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-helper
+test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-ownkey \
+          test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-vt-model
 
 run: $(B)/sshos-800k.dsk
 	"$(SNOW_APP)" "$(ROM)" --floppy $(B)/sshos-800k.dsk
@@ -333,22 +308,6 @@ demo:
 	@: > build-demo/sshd.log; /usr/sbin/sshd -D -E "$(CURDIR)/build-demo/sshd.log" \
 		-f "$(CURDIR)/build-demo/sshd/sshd_config" & server=$$!; \
 	trap "kill $$server 2>/dev/null" EXIT; \
-	"$(SNOW_APP)" build-demo/demo.snoww > build-demo/snow.log 2>&1
-
-# The older way, through a helper program on this Mac: "term".
-# Everything needed to try "term" in the Snow window: a disk built with
-# config.demo.txt and the terminal helper with your own shell. It listens on
-# this Mac only and stops when Snow is closed. tools/demo.snoww is a Snow workspace that attaches the network
-# adapter at SCSI ID 4 and sets the mouse to hardware emulation, so nothing
-# has to be clicked in Snow's menus. It is copied next to the disk because
-# its paths are relative to where it sits.
-demo-helper:
-	$(MAKE) B=build-demo CONFIG=config.demo.txt build-demo/sshos-800k.dsk
-	cp tools/demo.snoww build-demo/demo.snoww
-	@test -f build-demo/disk.img || python3 tools/sshosdisk.py make build-demo/disk.img 16
-	@JUANTERM_SECRET=emulator-demo-secret python3 -m tools.juanterm.server \
-		--listen 127.0.0.1 --port 2323 > build-demo/juanterm.log 2>&1 & helper=$$!; \
-	trap "kill $$helper 2>/dev/null" EXIT; \
 	"$(SNOW_APP)" build-demo/demo.snoww > build-demo/snow.log 2>&1
 
 # The SSH client in the emulated SE, logging in to an OpenSSH server on this
@@ -519,7 +478,7 @@ disasm: $(B)/kernel.elf
 clean:
 	rm -rf build build-crash build-auto build-demo
 
-.PHONY: all test test-crash test-scsi test-net test-tcp test-term test-helper demo demo-helper test-ssh test-desk \
+.PHONY: all test test-crash test-scsi test-net test-tcp test-vt-model demo test-ssh test-desk \
         test-net-host test-misc-host test-crypto-host test-ssh-host bench test-all run tools \
         test-disk test-fs-host test-wifi test-ownkey test-hdboot test-vt-host release \
         disasm clean

@@ -1,8 +1,8 @@
 # SSH OS settings. Copy this file to config.txt and edit it; "make" then
 # builds it into the boot disk. Lines starting with # are ignored.
 #
-# config.txt holds secrets (an SSH key, the helper's password). Keep it out
-# of anything you share or publish.
+# config.txt may hold secrets (an SSH key). Keep it out of anything you
+# share or publish.
 
 # Network: "dhcp", or four numbers: ADDRESS MASK GATEWAY NAMESERVER
 network = dhcp
@@ -19,18 +19,12 @@ network = dhcp
 # server lacks this one; "vt100" is the old stand-by.
 # ssh_term = xterm-256color
 
-# The older way to a shell, through a helper program on your Mac
-# (tools/juanterm): its address and port, and the shared secret it was
-# started with.
-helper = 192.168.1.10:2323
-secret = change-this-secret
-
 # What to run at start-up: desk (the home screen, also when this line is
-# missing), shell, ssh or term
+# missing), shell or ssh
 start = desk
 
 # Option types accented letters as on a Mac (Option-e then a vowel, Option-n
-# then n) and is the Meta key in "term" for the other keys. To make it
+# then n) and is the Meta key in ssh for the other keys. To make it
 # always the Meta key there, remove the # below.
 # option = meta
 

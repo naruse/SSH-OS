@@ -4,7 +4,7 @@ written in SSH OS character codes (one byte per character)."""
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "juanterm"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "model"))
 import charset  # noqa: E402
 
 log = open(sys.argv[1], "rb").read()

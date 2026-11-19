@@ -8,7 +8,7 @@ import subprocess
 import sys
 import unicodedata
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "juanterm"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "model"))
 import charset  # noqa: E402
 
 big = bytes((i * 7 + 1) & 0xFF for i in range(1000))

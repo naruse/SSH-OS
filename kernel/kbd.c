@@ -10,7 +10,7 @@
  * accent, Option-n then n gives an n with a tilde, Option-c a c with a
  * cedilla, and so on, for the characters the font has (the tables are
  * below). An Option combination without such a meaning is marked
- * KBD_EV_META, which "term" sends on as the Meta key.
+ * KBD_EV_META, which ssh sends on as the Meta key.
  */
 #include "kernel.h"
 
@@ -47,7 +47,7 @@ static const char plain[128] = {
 static const char shift_pairs[] = "1!2@3#4$5%6^7&8*9(0)-_=+[{]}\\|;:'\",<.>/?`~";
 
 /* Option and one key. The values are SSH OS character codes: Latin-1, and
- * below 0xA0 the extra symbols listed in tools/juanterm/charset.py. 0 means
+ * below 0xA0 the extra symbols listed in tools/model/charset.py. 0 means
  * the combination has no character here. */
 static const struct {
     u8 code, plain, shifted;
@@ -99,7 +99,7 @@ static volatile u8 q_head, q_tail;
 static u8 shift_down, control_down, caps_on, option_down, command_down;
 static u8 pending;              /* 1 + index of the dead key waiting for its letter */
 
-/* Set by "term" when the setting "option" is "meta": Option is then always
+/* Set by ssh when the setting "option" is "meta": Option is then always
  * the Meta key and types no accents. */
 u8 kbd_option_meta;
 

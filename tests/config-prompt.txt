@@ -1,6 +1,5 @@
 # For the tests that type at the command line: start there, not in the home
 # screen. The rest is as in config.example.txt.
 network = dhcp
-helper = 192.168.1.10:2323
 secret = change-this-secret
 start = shell

@@ -109,7 +109,6 @@ static void cmd_help(void)
           "  ls, cat NAME, rm NAME    the files on the SSH OS disk\n"
           "  desk     the home screen, with icons for the mouse\n"
           "  ssh USER@HOST   log in to another computer (Command-Q leaves)\n"
-          "  term     terminal for a shell on your Mac (needs the helper; Command-Q leaves)\n"
           "  set      show the settings; set NAME VALUE changes one and saves it on the\n"
           "           SSH OS disk (without one, it lasts until restart)\n"
           "  net up       find the network adapter and start the network as set\n"
@@ -880,10 +879,7 @@ static void run(char *line)
         cmd_ssh(argc, argv);
     else if (shell_streq(cmd, "desk"))
         cmd_desk();
-    else if (shell_streq(cmd, "term")) {
-        if (shell_need_network() == 0)
-            cmd_term(argc, argv);
-    } else if (shell_streq(cmd, "tcp"))
+    else if (shell_streq(cmd, "tcp"))
         cmd_tcp(argc, argv);
     else if (shell_streq(cmd, "tcptest"))
         cmd_tcptest(argc, argv);
@@ -901,7 +897,7 @@ static void run(char *line)
         kprintf("Unknown command \"%s\". Type help for a list.\n", cmd);
 }
 
-/* The "start" setting names a program to go straight into: ssh or term.
+/* The "start" setting names a program to go straight into: ssh.
  * Any key pressed in the first second keeps the OSConsole instead. */
 static void autostart(char *line)
 {
@@ -915,7 +911,7 @@ static void autostart(char *line)
         cmd_desk();
         return;
     }
-    if (!start || (!shell_streq(start, "term") && !shell_streq(start, "ssh")))
+    if (!start || !shell_streq(start, "ssh"))
         return;
     kprintf("Starting %s in a moment. Press any key to stay in the OSConsole.\n", start);
     for (until = ticks + 90; (s32)(ticks - until) < 0;) {

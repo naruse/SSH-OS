@@ -1,4 +1,4 @@
-"""Tests for tools/juanterm/vt.py (the terminal screen model).
+"""Tests for tools/model/vt.py (the terminal screen model).
 
 Run from the project root with either of:
 
@@ -15,8 +15,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from tools.juanterm import vt, charset                          # noqa: E402
-from tools.juanterm.vt import (Screen, ATTR_INVERSE, ATTR_BOLD,  # noqa: E402
+from tools.model import vt, charset                          # noqa: E402
+from tools.model.vt import (Screen, ATTR_INVERSE, ATTR_BOLD,  # noqa: E402
                                ATTR_UNDERLINE)
 
 BLANK = (32, 0)
