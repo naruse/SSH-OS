@@ -498,6 +498,14 @@ test-disk:
 	@python3 tools/sshosdisk.py get build-disk/disk.img RECENT.TXT | grep -q '@127.0.0.1:22026$$'
 	@echo "SSH OS disk test passed."
 
+# What to hand to someone who wants to run SSH OS: dist/SSH-OS-VERSION.zip
+# with the three files for the BlueSCSI's card and the guide
+# (docs/INSTALL.txt). Built from config.release.txt, never from your own
+# settings, so nothing of yours is in it.
+release:
+	$(MAKE) B=build-release CONFIG=config.release.txt build-release/sshos-boot.hda
+	python3 tools/mkrelease.py build-release/sshos-boot.hda dist
+
 tools:
 	mkdir -p "$(SNOW_SRC)/testrunner/src/bin/juanrun"
 	cp tools/snowrun/main.rs "$(SNOW_SRC)/testrunner/src/bin/juanrun/main.rs"
@@ -513,5 +521,5 @@ clean:
 
 .PHONY: all test test-crash test-scsi test-net test-tcp test-term test-helper demo demo-helper test-ssh test-desk \
         test-net-host test-misc-host test-crypto-host test-ssh-host bench test-all run tools \
-        test-disk test-fs-host test-wifi \
+        test-disk test-fs-host test-wifi test-ownkey test-hdboot test-vt-host release \
         disasm clean

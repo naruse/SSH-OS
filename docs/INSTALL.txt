@@ -1,0 +1,59 @@
+SSH OS: putting it on a Macintosh SE
+====================================
+
+What you need
+
+  - A Macintosh SE with the FDHD ROM (the one with the 1.4 MB "SuperDrive";
+    it is the only ROM SSH OS has been tried with) and 4 MB of memory.
+  - A BlueSCSI v2 with the Pico W, the WiFi model, inside or outside the SE.
+  - An SD card for it. Use a card of its own: SSH OS takes the machine over
+    from the first moment, and your Mac OS card stays as it is.
+
+There is nothing to install on the SE and nothing to build. The files in
+this folder are the whole system.
+
+Steps
+
+  1. Format the SD card as FAT32 or exFAT (MS-DOS FAT in Disk Utility).
+
+  2. Copy these three files to the top of the card, names unchanged:
+
+       HD0_512 SSH OS boot.hda    SSH OS itself; the SE starts from this
+       HD1_512 SSH OS.hda         where SSH OS keeps what it learns: your
+                                  WiFi, the servers you connect to, its key
+       NE4.hda                    an empty file; it switches on the
+                                  BlueSCSI's network adapter
+
+  3. Eject the card, put it in the BlueSCSI, switch the SE on. The start-up
+     picture shows for a few seconds, then the home screen.
+
+  4. Join your WiFi: click the fan at the right of the bar (or press W),
+     click your network, type its password, Return. It is remembered.
+
+  5. Click the SSH icon, then New connection, and type user@server (add
+     :port if it is not 22). Connect.
+
+Good to know
+
+  - Connecting takes about a minute: the 68000 does all of SSH's
+    arithmetic itself. The bar on the screen shows how far it is, and
+    Cancel (or Esc) stops it.
+  - The first time, SSH OS shows the server's fingerprint and asks whether
+    to trust it; after your password it asks whether to log in without one
+    from then on. Both answers are kept on the card.
+  - The clock is the SE's own. If its battery is flat the time is wrong;
+    nothing else minds.
+  - To go back to Mac OS, swap the cards. SSH OS writes nothing to any
+    other disk.
+  - Nothing here is Apple's: the loader and the system are SSH OS's own
+    code, under the MIT licence (see LICENSE).
+
+If it does not start
+
+  - A blinking question mark: the SE found no disk to start from. Check
+    that the file names are exactly as above and that the card is FAT32 or
+    exFAT; the BlueSCSI writes what it found to log.txt on the card.
+  - "offline" in the bar: the network adapter is missing (is NE4.hda on the
+    card? is this a Pico W?) or the WiFi is not joined yet (step 4).
+
+More, and the source: https://github.com/naruse/SSH-OS

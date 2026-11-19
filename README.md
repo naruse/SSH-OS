@@ -12,10 +12,15 @@ after that it is never called again.
 ![The home screen](docs/home.png)
 
 **Status.** SSH OS runs on a real Macintosh SE (FDHD ROM, 4 MB) with a
-BlueSCSI: it starts from the card, shows the home screen and logs in over
-SSH. The newest parts (the terminal for full-screen programs, Settings, the
-Ping button, the start-up screen, the hardware test's board) have so far only run in
-the Snow emulator. See "Not done or not verified" at the end.
+BlueSCSI, which is where its author uses it: it starts from the card, shows
+the home screen and logs in over SSH. It is developed and tested in the Snow
+emulator, and not every part has been checked one by one on the real
+machine. See "Not done or not verified" at the end.
+
+**To try it** you need no tools: take the zip from the
+[releases page](https://github.com/naruse/SSH-OS/releases), copy its three
+files to an SD card and put the card in the BlueSCSI. See "Install from a
+release" below.
 
 ## What it does
 
@@ -55,6 +60,30 @@ To build it (macOS or Linux):
 Nothing else: no Apple software, no libraries. The ROM is not part of this
 repository and is not needed to build; only the emulator needs one (see
 "Emulator and tests").
+
+## Install from a release
+
+Each release on the [releases page](https://github.com/naruse/SSH-OS/releases)
+is one zip, `SSH-OS-VERSION.zip`, made by `make release`. In it:
+
+| File | What it is |
+|---|---|
+| `HD0_512 SSH OS boot.hda` | SSH OS itself; the SE starts from this |
+| `HD1_512 SSH OS.hda` | An empty SSH OS disk, where it keeps your WiFi, the servers you connect to and its own key |
+| `NE4.hda` | An empty file: it switches on the BlueSCSI's network adapter |
+| `INSTALL.txt` | These steps, and what to check if it does not start |
+
+1. Format an SD card as FAT32 or exFAT. Use a card of its own; your Mac OS
+   card stays as it is.
+2. Copy the three `.hda` files to the top of the card, names unchanged.
+3. Put the card in the BlueSCSI and switch the SE on.
+4. Click the fan at the right of the bar, click your WiFi network and type
+   its password.
+5. Click SSH, then New connection, and type `user@server`.
+
+The release is built from `config.release.txt`, which holds nothing but
+"ask the network for an address": no key, no server, no WiFi of anyone's.
+Nothing in it is Apple's. To build it yourself instead, read on.
 
 ## Build
 
@@ -378,6 +407,27 @@ make test-all
 | `test-hdboot` | Starting from the hard disk image alone, as on the BlueSCSI |
 | `test-vt-host` | The terminal, built for this computer: stated cases, and 300 random streams of orders compared with a second, separately written terminal |
 
+### Tests on GitHub
+
+`.github/workflows/tests.yml` runs the tests on every push. The ones built
+for an ordinary computer (network, ciphers, SSH, terminal, file system) need
+nothing else and also run for pull requests. The ones in the emulated SE
+need Apple's ROM, which is not in this repository and may not be: they take
+it from a private repository of yours.
+
+1. Make a private repository on GitHub and put your ROM image in it (any
+   name ending in `.ROM`).
+2. Make a fine-grained personal access token that can read that one
+   repository: Settings, Developer settings, Personal access tokens,
+   Fine-grained tokens; Repository access: only that repository;
+   Permissions: Contents, read-only.
+3. In this repository's Settings, under Secrets and variables, Actions: add
+   the token as the secret `ROM_REPO_TOKEN`, and the private repository's
+   name (`you/its-name`) as the variable `ROM_REPO`.
+
+Without the variable the emulator job is skipped. Pull requests from other
+people never get the ROM: GitHub does not hand them secrets.
+
 ## How long connecting takes
 
 The 68000 does all of SSH's arithmetic itself, in plain C. `make bench`
@@ -427,11 +477,10 @@ keyboard and mouse would need their own driver.
 
 ## Not done or not verified
 
-- On the real SE: starting from the BlueSCSI, the home screen and an SSH
-  log-in work. Everything added after that first run has only been tried in
-  the emulator: the terminal for full-screen programs, Settings and the mouse
-  speed, the Ping button, the start-up screen, the hardware test's board and
-  the memory map.
+- On the real SE the current build starts from the BlueSCSI and runs well
+  for its author, but what is checked with care is checked in the
+  emulator. Not yet tried on the real machine one by one: the memory test's
+  map, the SE's own key, the WiFi password's caret.
 - SSH:
   - Connecting takes about a minute (see above).
   - Random numbers, which SSH's safety rests on, are gathered from the

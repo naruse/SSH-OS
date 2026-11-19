@@ -16,3 +16,6 @@ emu/
 __pycache__/
 *.pyc
 .DS_Store
+
+# What "make release" makes
+dist/

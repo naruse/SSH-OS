@@ -1,0 +1,4 @@
+# The settings built into a release ("make release"): nothing of anyone's
+# own. The network asks for its address; WiFi, servers and the rest are
+# set on the SE and kept on its SSH OS disk.
+network = dhcp
