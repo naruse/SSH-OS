@@ -7,8 +7,6 @@ your WiFi, and logs in to other computers by itself: a real SSH client on an
 ROM is used for one thing only, reading the kernel off the disk at start-up;
 after that it is never called again.
 
-by Juan Munoz Arango
-
 ![The start-up screen](docs/startup.png)
 
 ![The home screen](docs/home.png)
