@@ -1,0 +1,2035 @@
+;; SSH OS console font, 6 x 10 pixel cell.
+;;
+;; Each glyph is drawn 5 pixels wide (X = black). The tool adds a blank column
+;; on the right and a blank row on top, so a glyph may have up to 9 rows:
+;; rows 1-7 are the capital height, rows 8-9 are for descenders.
+;; Missing rows are blank. A glyph starts with "= " and the character
+;; ("= space" for the space character).
+;;
+;; A glyph drawn 6 wide fills the whole cell instead: up to 10 rows, starting
+;; at the cell's top row. Line drawing and accented capitals are drawn so.
+;;
+;; Which character gets which code is in tools/juanterm/charset.py.
+
+= space
+
+= !
+..X..
+..X..
+..X..
+..X..
+..X..
+.....
+..X..
+
+= "
+.X.X.
+.X.X.
+.X.X.
+
+= #
+.X.X.
+.X.X.
+XXXXX
+.X.X.
+XXXXX
+.X.X.
+.X.X.
+
+= $
+..X..
+.XXXX
+X.X..
+.XXX.
+..X.X
+XXXX.
+..X..
+
+= %
+XX...
+XX..X
+...X.
+..X..
+.X...
+X..XX
+...XX
+
+= &
+.XX..
+X..X.
+X.X..
+.X...
+X.X.X
+X..X.
+.XX.X
+
+= '
+..X..
+..X..
+.X...
+
+= (
+...X.
+..X..
+.X...
+.X...
+.X...
+..X..
+...X.
+
+= )
+.X...
+..X..
+...X.
+...X.
+...X.
+..X..
+.X...
+
+= *
+.....
+..X..
+X.X.X
+.XXX.
+X.X.X
+..X..
+
+= +
+.....
+..X..
+..X..
+XXXXX
+..X..
+..X..
+
+= ,
+.....
+.....
+.....
+.....
+.....
+.XX..
+..X..
+.X...
+
+= -
+.....
+.....
+.....
+XXXXX
+
+= .
+.....
+.....
+.....
+.....
+.....
+.XX..
+.XX..
+
+= /
+.....
+....X
+...X.
+..X..
+.X...
+X....
+
+= 0
+.XXX.
+X...X
+X..XX
+X.X.X
+XX..X
+X...X
+.XXX.
+
+= 1
+..X..
+.XX..
+..X..
+..X..
+..X..
+..X..
+.XXX.
+
+= 2
+.XXX.
+X...X
+....X
+...X.
+..X..
+.X...
+XXXXX
+
+= 3
+XXXXX
+...X.
+..X..
+...X.
+....X
+X...X
+.XXX.
+
+= 4
+...X.
+..XX.
+.X.X.
+X..X.
+XXXXX
+...X.
+...X.
+
+= 5
+XXXXX
+X....
+XXXX.
+....X
+....X
+X...X
+.XXX.
+
+= 6
+..XX.
+.X...
+X....
+XXXX.
+X...X
+X...X
+.XXX.
+
+= 7
+XXXXX
+....X
+...X.
+..X..
+.X...
+.X...
+.X...
+
+= 8
+.XXX.
+X...X
+X...X
+.XXX.
+X...X
+X...X
+.XXX.
+
+= 9
+.XXX.
+X...X
+X...X
+.XXXX
+....X
+...X.
+.XX..
+
+= :
+.....
+.XX..
+.XX..
+.....
+.XX..
+.XX..
+
+= ;
+.....
+.XX..
+.XX..
+.....
+.XX..
+..X..
+.X...
+
+= <
+...X.
+..X..
+.X...
+X....
+.X...
+..X..
+...X.
+
+= =
+.....
+.....
+XXXXX
+.....
+XXXXX
+
+= >
+.X...
+..X..
+...X.
+....X
+...X.
+..X..
+.X...
+
+= ?
+.XXX.
+X...X
+....X
+...X.
+..X..
+.....
+..X..
+
+= @
+.XXX.
+X...X
+....X
+.XX.X
+X.X.X
+X.X.X
+.XXX.
+
+= A
+.XXX.
+X...X
+X...X
+X...X
+XXXXX
+X...X
+X...X
+
+= B
+XXXX.
+X...X
+X...X
+XXXX.
+X...X
+X...X
+XXXX.
+
+= C
+.XXX.
+X...X
+X....
+X....
+X....
+X...X
+.XXX.
+
+= D
+XXX..
+X..X.
+X...X
+X...X
+X...X
+X..X.
+XXX..
+
+= E
+XXXXX
+X....
+X....
+XXXX.
+X....
+X....
+XXXXX
+
+= F
+XXXXX
+X....
+X....
+XXXX.
+X....
+X....
+X....
+
+= G
+.XXX.
+X...X
+X....
+X.XXX
+X...X
+X...X
+.XXXX
+
+= H
+X...X
+X...X
+X...X
+XXXXX
+X...X
+X...X
+X...X
+
+= I
+.XXX.
+..X..
+..X..
+..X..
+..X..
+..X..
+.XXX.
+
+= J
+..XXX
+...X.
+...X.
+...X.
+...X.
+X..X.
+.XX..
+
+= K
+X...X
+X..X.
+X.X..
+XX...
+X.X..
+X..X.
+X...X
+
+= L
+X....
+X....
+X....
+X....
+X....
+X....
+XXXXX
+
+= M
+X...X
+XX.XX
+X.X.X
+X.X.X
+X...X
+X...X
+X...X
+
+= N
+X...X
+X...X
+XX..X
+X.X.X
+X..XX
+X...X
+X...X
+
+= O
+.XXX.
+X...X
+X...X
+X...X
+X...X
+X...X
+.XXX.
+
+= P
+XXXX.
+X...X
+X...X
+XXXX.
+X....
+X....
+X....
+
+= Q
+.XXX.
+X...X
+X...X
+X...X
+X.X.X
+X..X.
+.XX.X
+
+= R
+XXXX.
+X...X
+X...X
+XXXX.
+X.X..
+X..X.
+X...X
+
+= S
+.XXXX
+X....
+X....
+.XXX.
+....X
+....X
+XXXX.
+
+= T
+XXXXX
+..X..
+..X..
+..X..
+..X..
+..X..
+..X..
+
+= U
+X...X
+X...X
+X...X
+X...X
+X...X
+X...X
+.XXX.
+
+= V
+X...X
+X...X
+X...X
+X...X
+X...X
+.X.X.
+..X..
+
+= W
+X...X
+X...X
+X...X
+X.X.X
+X.X.X
+X.X.X
+.X.X.
+
+= X
+X...X
+X...X
+.X.X.
+..X..
+.X.X.
+X...X
+X...X
+
+= Y
+X...X
+X...X
+X...X
+.X.X.
+..X..
+..X..
+..X..
+
+= Z
+XXXXX
+....X
+...X.
+..X..
+.X...
+X....
+XXXXX
+
+= [
+.XXX.
+.X...
+.X...
+.X...
+.X...
+.X...
+.XXX.
+
+= \
+.....
+X....
+.X...
+..X..
+...X.
+....X
+
+= ]
+.XXX.
+...X.
+...X.
+...X.
+...X.
+...X.
+.XXX.
+
+= ^
+..X..
+.X.X.
+X...X
+
+= _
+.....
+.....
+.....
+.....
+.....
+.....
+.....
+XXXXX
+
+= `
+.X...
+..X..
+...X.
+
+= a
+.....
+.....
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= b
+X....
+X....
+X.XX.
+XX..X
+X...X
+X...X
+XXXX.
+
+= c
+.....
+.....
+.XXX.
+X....
+X....
+X...X
+.XXX.
+
+= d
+....X
+....X
+.XX.X
+X..XX
+X...X
+X...X
+.XXXX
+
+= e
+.....
+.....
+.XXX.
+X...X
+XXXXX
+X....
+.XXX.
+
+= f
+..XX.
+.X..X
+.X...
+XXX..
+.X...
+.X...
+.X...
+
+= g
+.....
+.....
+.XXXX
+X...X
+X...X
+X...X
+.XXXX
+....X
+.XXX.
+
+= h
+X....
+X....
+X.XX.
+XX..X
+X...X
+X...X
+X...X
+
+= i
+..X..
+.....
+.XX..
+..X..
+..X..
+..X..
+.XXX.
+
+= j
+...X.
+.....
+..XX.
+...X.
+...X.
+...X.
+...X.
+X..X.
+.XX..
+
+= k
+X....
+X....
+X..X.
+X.X..
+XX...
+X.X..
+X..X.
+
+= l
+.XX..
+..X..
+..X..
+..X..
+..X..
+..X..
+.XXX.
+
+= m
+.....
+.....
+XX.X.
+X.X.X
+X.X.X
+X.X.X
+X.X.X
+
+= n
+.....
+.....
+X.XX.
+XX..X
+X...X
+X...X
+X...X
+
+= o
+.....
+.....
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= p
+.....
+.....
+XXXX.
+X...X
+X...X
+X...X
+XXXX.
+X....
+X....
+
+= q
+.....
+.....
+.XXXX
+X...X
+X...X
+X...X
+.XXXX
+....X
+....X
+
+= r
+.....
+.....
+X.XX.
+XX..X
+X....
+X....
+X....
+
+= s
+.....
+.....
+.XXXX
+X....
+.XXX.
+....X
+XXXX.
+
+= t
+.X...
+.X...
+XXX..
+.X...
+.X...
+.X..X
+..XX.
+
+= u
+.....
+.....
+X...X
+X...X
+X...X
+X..XX
+.XX.X
+
+= v
+.....
+.....
+X...X
+X...X
+X...X
+.X.X.
+..X..
+
+= w
+.....
+.....
+X...X
+X...X
+X.X.X
+X.X.X
+.X.X.
+
+= x
+.....
+.....
+X...X
+.X.X.
+..X..
+.X.X.
+X...X
+
+= y
+.....
+.....
+X...X
+X...X
+X...X
+X...X
+.XXXX
+....X
+.XXX.
+
+= z
+.....
+.....
+XXXXX
+...X.
+..X..
+.X...
+XXXXX
+
+= {
+...X.
+..X..
+..X..
+.X...
+..X..
+..X..
+...X.
+
+= |
+..X..
+..X..
+..X..
+..X..
+..X..
+..X..
+..X..
+
+= }
+.X...
+..X..
+..X..
+...X.
+..X..
+..X..
+.X...
+
+= ~
+.....
+.....
+.X...
+X.X.X
+...X.
+
+;; ---- Line drawing and blocks: these fill the whole 6 x 10 cell, so they
+;; ---- are drawn 6 wide and start at the cell's top row.
+
+= ─
+......
+......
+......
+......
+XXXXXX
+
+= │
+..X...
+..X...
+..X...
+..X...
+..X...
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ┌
+......
+......
+......
+......
+..XXXX
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ┐
+......
+......
+......
+......
+XXX...
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= └
+..X...
+..X...
+..X...
+..X...
+..XXXX
+
+= ┘
+..X...
+..X...
+..X...
+..X...
+XXX...
+
+= ├
+..X...
+..X...
+..X...
+..X...
+..XXXX
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ┤
+..X...
+..X...
+..X...
+..X...
+XXX...
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ┬
+......
+......
+......
+......
+XXXXXX
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ┴
+..X...
+..X...
+..X...
+..X...
+XXXXXX
+
+= ┼
+..X...
+..X...
+..X...
+..X...
+XXXXXX
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ╭
+......
+......
+......
+......
+...XXX
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ╮
+......
+......
+......
+......
+XX....
+..X...
+..X...
+..X...
+..X...
+..X...
+
+= ╰
+..X...
+..X...
+..X...
+..X...
+...XXX
+
+= ╯
+..X...
+..X...
+..X...
+..X...
+XX....
+
+= █
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+
+= ▀
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+
+= ▄
+......
+......
+......
+......
+......
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+XXXXXX
+
+= ▌
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+XXX...
+
+= ▐
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+...XXX
+
+= ░
+X.X.X.
+......
+X.X.X.
+......
+X.X.X.
+......
+X.X.X.
+......
+X.X.X.
+
+= ▒
+X.X.X.
+.X.X.X
+X.X.X.
+.X.X.X
+X.X.X.
+.X.X.X
+X.X.X.
+.X.X.X
+X.X.X.
+.X.X.X
+
+= ▓
+.X.X.X
+XXXXXX
+.X.X.X
+XXXXXX
+.X.X.X
+XXXXXX
+.X.X.X
+XXXXXX
+.X.X.X
+XXXXXX
+
+;; ---- Arrows and symbols
+
+= ←
+.....
+..X..
+.X...
+XXXXX
+.X...
+..X..
+
+= ↑
+..X..
+.XXX.
+X.X.X
+..X..
+..X..
+..X..
+..X..
+
+= →
+.....
+..X..
+...X.
+XXXXX
+...X.
+..X..
+
+= ↓
+..X..
+..X..
+..X..
+..X..
+X.X.X
+.XXX.
+..X..
+
+= •
+.....
+.....
+.XXX.
+.XXX.
+.XXX.
+
+= …
+.....
+.....
+.....
+.....
+.....
+.....
+X.X.X
+
+= ●
+.....
+.XXX.
+XXXXX
+XXXXX
+XXXXX
+.XXX.
+
+= —
+.....
+.....
+.....
+XXXXX
+
+= ✓
+.....
+....X
+...X.
+X.X..
+.X...
+
+;; ---- Latin-1 punctuation and symbols (U+00A1 to U+00BF)
+
+= ¡
+.....
+.....
+..X..
+.....
+..X..
+..X..
+..X..
+..X..
+..X..
+
+= ¢
+.....
+..X..
+.XXX.
+X.X..
+X.X..
+X.X.X
+.XXX.
+..X..
+
+= £
+..XX.
+.X..X
+.X...
+XXX..
+.X...
+.X...
+XXXXX
+
+= ¤
+.....
+X...X
+.XXX.
+.X.X.
+.XXX.
+X...X
+
+= ¥
+X...X
+.X.X.
+..X..
+XXXXX
+..X..
+XXXXX
+..X..
+
+= ¦
+..X..
+..X..
+..X..
+.....
+..X..
+..X..
+..X..
+
+= §
+.XXX.
+X....
+.XX..
+X..X.
+.X..X
+..XX.
+....X
+.XXX.
+
+= ¨
+.X.X.
+
+= ©
+.XXX.
+X...X
+X.XXX
+X.X..
+X.XXX
+X...X
+.XXX.
+
+= ª
+.XX..
+...X.
+.XXX.
+X..X.
+.XXX.
+.....
+XXXX.
+
+= «
+.....
+.....
+..X.X
+.X.X.
+X.X..
+.X.X.
+..X.X
+
+= ¬
+.....
+.....
+.....
+XXXXX
+....X
+....X
+
+= ®
+.XXX.
+X...X
+XXX.X
+XX.XX
+XXX.X
+XX.XX
+.XXX.
+
+= ¯
+XXXXX
+
+= °
+.XX..
+X..X.
+X..X.
+.XX..
+
+= ±
+.....
+..X..
+..X..
+XXXXX
+..X..
+..X..
+XXXXX
+
+= ²
+.XX..
+X..X.
+..X..
+.X...
+XXXX.
+
+= ³
+XXX..
+...X.
+.XX..
+...X.
+XXX..
+
+= ´
+...X.
+..X..
+
+= µ
+.....
+.....
+X...X
+X...X
+X...X
+X..XX
+XXX.X
+X....
+X....
+
+= ¶
+.XXXX
+X.X.X
+X.X.X
+.XX.X
+..X.X
+..X.X
+..X.X
+
+= ·
+.....
+.....
+.....
+.XX..
+.XX..
+
+= ¸
+.....
+.....
+.....
+.....
+.....
+.....
+.....
+..X..
+.XX..
+
+= ¹
+..X..
+.XX..
+..X..
+..X..
+.XXX.
+
+= º
+.XX..
+X..X.
+X..X.
+.XX..
+.....
+XXXX.
+
+= »
+.....
+.....
+X.X..
+.X.X.
+..X.X
+.X.X.
+X.X..
+
+= ¼
+X....
+X..X.
+X.X..
+.X...
+X..X.
+..XX.
+.X.X.
+.XXXX
+...X.
+
+= ½
+X....
+X..X.
+X.X..
+.X...
+X.XX.
+....X
+..XX.
+.X...
+.XXXX
+
+= ¾
+XX...
+.X.X.
+XXX..
+.X...
+X..X.
+..XX.
+.X.X.
+.XXXX
+...X.
+
+= ¿
+.....
+.....
+..X..
+.....
+..X..
+.X...
+X....
+X...X
+.XXX.
+
+;; ---- Letters with no plain base letter
+
+= Æ
+.XXXX
+X.X..
+X.X..
+XXXX.
+X.X..
+X.X..
+X.XXX
+
+= Ð
+XXX..
+X..X.
+X...X
+XXX.X
+X...X
+X..X.
+XXX..
+
+= ×
+.....
+.....
+X...X
+.X.X.
+..X..
+.X.X.
+X...X
+
+= Ø
+.XXX.
+X..XX
+X.X.X
+X.X.X
+X.X.X
+XX..X
+.XXX.
+
+= Þ
+X....
+XXXX.
+X...X
+X...X
+XXXX.
+X....
+X....
+
+= ß
+.XX..
+X..X.
+X..X.
+X.X..
+X..X.
+X...X
+X.XX.
+
+= æ
+.....
+.....
+XX.X.
+..X.X
+.XXXX
+X.X..
+.X.XX
+
+= ð
+X.X..
+.X...
+X.X..
+.XXX.
+X...X
+X...X
+.XXX.
+
+= ÷
+.....
+..X..
+.....
+XXXXX
+.....
+..X..
+
+= ø
+.....
+.....
+.XXXX
+X..XX
+X.X.X
+XX..X
+XXXX.
+
+= þ
+X....
+X....
+X.XX.
+XX..X
+X...X
+X...X
+XXXX.
+X....
+X....
+
+;; ---- Small letters with accents: the accent takes the two rows above the
+;; ---- letter (i loses its dot).
+
+= à
+.X...
+..X..
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= á
+...X.
+..X..
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= â
+..X..
+.X.X.
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= ã
+..X.X
+.X.X.
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= ä
+.X.X.
+.....
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= å
+.XXX.
+.X.X.
+.XXX.
+....X
+.XXXX
+X...X
+.XXXX
+
+= è
+.X...
+..X..
+.XXX.
+X...X
+XXXXX
+X....
+.XXX.
+
+= é
+...X.
+..X..
+.XXX.
+X...X
+XXXXX
+X....
+.XXX.
+
+= ê
+..X..
+.X.X.
+.XXX.
+X...X
+XXXXX
+X....
+.XXX.
+
+= ë
+.X.X.
+.....
+.XXX.
+X...X
+XXXXX
+X....
+.XXX.
+
+= ì
+.X...
+..X..
+.XX..
+..X..
+..X..
+..X..
+.XXX.
+
+= í
+...X.
+..X..
+.XX..
+..X..
+..X..
+..X..
+.XXX.
+
+= î
+..X..
+.X.X.
+.XX..
+..X..
+..X..
+..X..
+.XXX.
+
+= ï
+.X.X.
+.....
+.XX..
+..X..
+..X..
+..X..
+.XXX.
+
+= ñ
+..X.X
+.X.X.
+X.XX.
+XX..X
+X...X
+X...X
+X...X
+
+= ò
+.X...
+..X..
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= ó
+...X.
+..X..
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= ô
+..X..
+.X.X.
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= õ
+..X.X
+.X.X.
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= ö
+.X.X.
+.....
+.XXX.
+X...X
+X...X
+X...X
+.XXX.
+
+= ù
+.X...
+..X..
+X...X
+X...X
+X...X
+X..XX
+.XX.X
+
+= ú
+...X.
+..X..
+X...X
+X...X
+X...X
+X..XX
+.XX.X
+
+= û
+..X..
+.X.X.
+X...X
+X...X
+X...X
+X..XX
+.XX.X
+
+= ü
+.X.X.
+.....
+X...X
+X...X
+X...X
+X..XX
+.XX.X
+
+= ý
+...X.
+..X..
+X...X
+X...X
+X...X
+X...X
+.XXXX
+....X
+.XXX.
+
+= ÿ
+.X.X.
+.....
+X...X
+X...X
+X...X
+X...X
+.XXXX
+....X
+.XXX.
+
+= ç
+.....
+.....
+.XXX.
+X....
+X....
+X...X
+.XXX.
+..X..
+.XX..
+
+;; ---- Capitals with accents: drawn 6 wide from the cell's top row. The
+;; ---- accent takes rows 0-1 and the capital is one row shorter than usual.
+
+= À
+.X....
+..X...
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= Á
+...X..
+..X...
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= Â
+..X...
+.X.X..
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= Ã
+..X.X.
+.X.X..
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= Ä
+.X.X..
+......
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= Å
+.XXX..
+.X.X..
+.XXX..
+X...X.
+X...X.
+XXXXX.
+X...X.
+X...X.
+
+= È
+.X....
+..X...
+XXXXX.
+X.....
+XXXX..
+X.....
+X.....
+XXXXX.
+
+= É
+...X..
+..X...
+XXXXX.
+X.....
+XXXX..
+X.....
+X.....
+XXXXX.
+
+= Ê
+..X...
+.X.X..
+XXXXX.
+X.....
+XXXX..
+X.....
+X.....
+XXXXX.
+
+= Ë
+.X.X..
+......
+XXXXX.
+X.....
+XXXX..
+X.....
+X.....
+XXXXX.
+
+= Ì
+.X....
+..X...
+.XXX..
+..X...
+..X...
+..X...
+..X...
+.XXX..
+
+= Í
+...X..
+..X...
+.XXX..
+..X...
+..X...
+..X...
+..X...
+.XXX..
+
+= Î
+..X...
+.X.X..
+.XXX..
+..X...
+..X...
+..X...
+..X...
+.XXX..
+
+= Ï
+.X.X..
+......
+.XXX..
+..X...
+..X...
+..X...
+..X...
+.XXX..
+
+= Ñ
+..X.X.
+.X.X..
+X...X.
+XX..X.
+X.X.X.
+X..XX.
+X...X.
+X...X.
+
+= Ò
+.X....
+..X...
+.XXX..
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ó
+...X..
+..X...
+.XXX..
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ô
+..X...
+.X.X..
+.XXX..
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Õ
+..X.X.
+.X.X..
+.XXX..
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ö
+.X.X..
+......
+.XXX..
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ù
+.X....
+..X...
+X...X.
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ú
+...X..
+..X...
+X...X.
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Û
+..X...
+.X.X..
+X...X.
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ü
+.X.X..
+......
+X...X.
+X...X.
+X...X.
+X...X.
+X...X.
+.XXX..
+
+= Ý
+...X..
+..X...
+X...X.
+X...X.
+.X.X..
+..X...
+..X...
+..X...
+
+= Ç
+.XXX.
+X...X
+X....
+X....
+X....
+X...X
+.XXX.
+..X..
+.XX..

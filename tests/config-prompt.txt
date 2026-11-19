@@ -1,0 +1,8 @@
+# For the tests that type at the command line: start there, not in the home
+# screen. The rest is as in config.example.txt.
+network = dhcp
+helper = 192.168.1.10:2323
+secret = change-this-secret
+ha = 192.168.1.5:8123
+ha_token =
+start = shell

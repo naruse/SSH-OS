@@ -1,0 +1,10 @@
+{
+  "viewport_scale": 2.0,
+  "rom_path": "../B306E171 - Mac SE FDHD.ROM",
+  "floppy_images": ["sshos-800k.dsk"],
+  "scsi_targets": ["None", {"Disk": "disk.img"}, "None", "None", "Ethernet", "None", "None"],
+  "ethernet_link_type": "NAT",
+  "init_args": {
+    "mouse_mode": "RelativeHw"
+  }
+}

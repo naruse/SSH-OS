@@ -1,0 +1,6 @@
+network = 10.0.0.2 255.0.0.0 10.0.0.1 1.1.1.1
+helper = 127.0.0.1:2323
+secret = emulator-test-secret
+ha = 127.0.0.1:8123
+ha_token = test-token
+start = home

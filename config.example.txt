@@ -1,0 +1,53 @@
+# SSH OS settings. Copy this file to config.txt and edit it; "make" then
+# builds it into the boot disk. Lines starting with # are ignored.
+#
+# config.txt holds secrets (the helper's password and the Home Assistant
+# token). Keep it out of anything you share or publish.
+
+# Network: "dhcp", or four numbers: ADDRESS MASK GATEWAY NAMESERVER
+network = dhcp
+
+# SSH: where "ssh" without arguments logs in, as USER@HOST or USER@HOST:PORT.
+# ssh_key is the SE's own key, made with tools/sshkey.py (see the README);
+# without it the SE asks for the password. ssh_hosts lists servers whose key
+# is known, as pairs: HOST FINGERPRINT. It is only needed without an SSH OS
+# disk: with one, the SE remembers the keys you accept.
+# ssh = me@192.168.1.10
+# ssh_key =
+# ssh_hosts =
+# What the terminal tells the server it is (TERM). Leave it alone unless a
+# server lacks this one; "vt100" is the old stand-by.
+# ssh_term = xterm-256color
+
+# The older way to a shell, through a helper program on your Mac
+# (tools/juanterm): its address and port, and the shared secret it was
+# started with.
+helper = 192.168.1.10:2323
+secret = change-this-secret
+
+# Home Assistant: address and port (plain http), and a long-lived access
+# token (your profile page in Home Assistant, under Security).
+ha = 192.168.1.5:8123
+ha_token =
+
+# What to run at start-up: desk (the home screen, also when this line is
+# missing), shell, ssh, term or home
+start = desk
+
+# Option types accented letters as on a Mac (Option-e then a vowel, Option-n
+# then n) and is the Meta key in "term" for the other keys. To make it
+# always the Meta key there, remove the # below.
+# option = meta
+
+# The SSH OS disk is where the SE keeps what is changed on it: settings
+# (those win over this file), the SSH servers it trusts and the connections
+# used. SSH OS looks for it at every SCSI ID; naming the ID here saves a
+# second or two at start-up.
+# disk = 1
+
+# Sound volume at start-up, 0 (off) to 7.
+# volume = 5
+
+# How fast the pointer moves, 1 (half speed) to 7 (six times); 2 is one
+# pixel for each step of the mouse. Settings on the home screen changes it.
+# mouse = 2

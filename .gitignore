@@ -1,0 +1,18 @@
+# Built files, and the images built from your own settings
+build*/
+sdcard/
+*.hda
+*.dsk
+*.img
+
+# Your settings: may hold an SSH key and passwords
+config.txt
+
+# Apple's ROM and the emulator are not ours to share
+*.ROM
+*.rom
+emu/
+
+__pycache__/
+*.pyc
+.DS_Store
