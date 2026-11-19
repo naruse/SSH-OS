@@ -14,10 +14,9 @@ after that it is never called again.
 ![The home screen](docs/home.png)
 
 **Status.** SSH OS runs on a real Macintosh SE (FDHD ROM, 4 MB) with a
-BlueSCSI, which is where its author uses it: it starts from the card, shows
-the home screen and logs in over SSH. It is developed and tested in the Snow
-emulator, and not every part has been checked one by one on the real
-machine: see [what is not done or not verified](docs/NOTES.md#not-done-or-not-verified).
+BlueSCSI: it starts from the card, joins the WiFi and logs in over SSH. It
+is developed and tested in the Snow emulator and checked on the real
+machine. What it does not do yet is in the [notes](docs/NOTES.md#not-done).
 
 **To try it** you need no tools: take the zip from the
 [releases page](https://github.com/naruse/SSH-OS/releases), copy its three
@@ -80,7 +79,7 @@ Nothing in it is Apple's. To build it yourself instead, see
 - [Building and testing](docs/BUILDING.md): what you need, the build, the
   emulator, the tests and how they run on GitHub.
 - [Notes](docs/NOTES.md): how long things take, other machines, what is not
-  done or not verified, where things are in the source.
+  done, where things are in the source.
 
 ## Licence
 

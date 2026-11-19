@@ -50,12 +50,8 @@ do the SSH arithmetic several times faster.
 **Macintosh Plus and Classic:** not tried. The Plus has no ADB, so its
 keyboard and mouse would need their own driver.
 
-## Not done or not verified
+## Not done
 
-- On the real SE the current build starts from the BlueSCSI and runs well
-  for its author, but what is checked with care is checked in the
-  emulator. Not yet tried on the real machine one by one: the memory test's
-  map, the SE's own key, the WiFi password's caret.
 - SSH:
   - Connecting takes about a minute (see above).
   - Random numbers, which SSH's safety rests on, are gathered from the
