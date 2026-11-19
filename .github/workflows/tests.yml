@@ -7,7 +7,8 @@
 # The second runs SSH OS itself in the Snow emulator, which cannot start a
 # Macintosh SE without Apple's ROM. That ROM is Apple's and is not in this
 # repository: the job takes it from a private repository named by the
-# variable ROM_REPO, with the token in the secret ROM_REPO_TOKEN (see
+# variable ROM_REPO, with that repository's read-only deploy key in the secret
+# ROM_REPO_KEY (see
 # "Tests on GitHub" in the README). Without those two it is skipped, and it
 # never runs for pull requests, which are not given secrets.
 name: Tests
@@ -47,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.ROM_REPO }}
-          token: ${{ secrets.ROM_REPO_TOKEN }}
+          ssh-key: ${{ secrets.ROM_REPO_KEY }}
           path: rom-private
       - name: Put the ROM where the Makefile looks for it
         run: |

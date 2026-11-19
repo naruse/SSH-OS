@@ -420,13 +420,19 @@ it from a private repository of yours.
 
 1. Make a private repository on GitHub and put your ROM image in it (any
    name ending in `.ROM`).
-2. Make a fine-grained personal access token that can read that one
-   repository: Settings, Developer settings, Personal access tokens,
-   Fine-grained tokens; Repository access: only that repository;
-   Permissions: Contents, read-only.
-3. In this repository's Settings, under Secrets and variables, Actions: add
-   the token as the secret `ROM_REPO_TOKEN`, and the private repository's
-   name (`you/its-name`) as the variable `ROM_REPO`.
+2. Give it a read-only deploy key and hand the private half to this
+   repository as the secret `ROM_REPO_KEY`:
+
+   ```bash
+   ssh-keygen -t ed25519 -N "" -f romkey
+   gh repo deploy-key add romkey.pub --repo you/its-name --title "SSH OS tests"
+   gh secret set ROM_REPO_KEY --repo you/SSH-OS < romkey
+   rm romkey romkey.pub
+   ```
+
+   A deploy key opens that one repository and nothing else of yours.
+3. Name the private repository in the variable `ROM_REPO`:
+   `gh variable set ROM_REPO --repo you/SSH-OS --body you/its-name`.
 
 Without the variable the emulator job is skipped. Pull requests from other
 people never get the ROM: GitHub does not hand them secrets.
