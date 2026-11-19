@@ -93,7 +93,7 @@ static int event(u8 *ch, u8 *raw)
             continue;
         *ch = (u8)(ev & 0xFF);
         *raw = (u8)((ev >> 8) & 0x7F);
-        if (*ch || *raw == 0x3D || *raw == 0x3E) {
+        if (*ch || (*raw >= 0x3B && *raw <= 0x3E)) {     /* a character, or an arrow */
             bar_work();
             return 2;
         }
@@ -280,9 +280,14 @@ static int nfound;
 static u8 scan;                 /* 1 looking, 2 have the list, 3 the adapter cannot */
 
 /* The last line of the panel, for hints and for the password. */
+static int message_y(void)
+{
+    return LIST_Y + (scan == 2 && nfound > 0 ? nfound : 1) * LIST_ROW + 4;
+}
+
 static void panel_message(const char *a, const char *b)
 {
-    int y = LIST_Y + (scan == 2 && nfound > 0 ? nfound : 1) * LIST_ROW + 4;
+    int y = message_y();
 
     gfx_begin();
     gfx_fill(PANEL_X + 1, y - 1, PANEL_W - 2, 12, GFX_WHITE);
@@ -348,31 +353,49 @@ static void draw_panel(void)
 /* Join the network in that row; its password is typed into the panel. */
 static void join(int i)
 {
+    static const char ask[] = "Password: ";
     static char password[64];
     char dots[34];
-    int len = 0, got, tries;
+    int len = 0, at = 0, got, tries, first, shown, x0;
     u8 ch = 0, raw = 0;
 
     password[0] = 0;
     if (found[i].secured) {
         for (;;) {
-            memset(dots, 0x9B, sizeof dots);            /* a bullet for each character */
-            dots[len < 30 ? len : 30] = '_';
-            dots[(len < 30 ? len : 30) + 1] = 0;
-            panel_message("Password: ", dots);
+            /* a bullet for each character, and a bar where the caret is:
+             * the arrows or a click move it, typing and Delete happen there */
+            first = at > 29 ? at - 29 : 0;
+            shown = len - first < 30 ? len - first : 30;
+            memset(dots, 0x9B, sizeof dots);
+            memmove(dots + (at - first) + 1, dots + (at - first), (u32)(shown - (at - first)));
+            dots[at - first] = '|';
+            dots[shown + 1] = 0;
+            panel_message(ask, dots);
             while ((got = event(&ch, &raw)) == 0)
                 ;
-            if (got == 1 || ch == 0x1B) {
+            if (got == 1) {
+                x0 = PANEL_X + 10 + gfx_text_width(ask, 1);
+                if (mouse.click_y >= message_y() - 2 && mouse.click_y < message_y() + 12 &&
+                    mouse.click_x >= x0 - 6 && mouse.click_x < PANEL_X + PANEL_W) {
+                    at = first + (mouse.click_x - x0 + 3) / 6;
+                    if (at > len)
+                        at = len;
+                    if (at < 0)
+                        at = 0;
+                    continue;
+                }
+                memset(password, 0, sizeof password);
+                return;
+            }
+            if (ch == 0x1B) {
                 memset(password, 0, sizeof password);
                 return;
             }
             if (ch == '\n')
                 break;
-            if (ch == '\b' && len > 0)
-                len--;
-            else if (ch >= 32 && ch < 127 && len < (int)sizeof password - 1)
-                password[len++] = (char)ch;
-            password[len] = 0;
+            if (!ch && raw != 0x3B && raw != 0x3C)
+                continue;
+            kbd_line_edit(password, &len, &at, (int)sizeof password, ch < 0x80 ? ch : 0, ch ? 0 : raw);
         }
     }
     panel_message("Joining ", found[i].name);

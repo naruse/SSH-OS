@@ -312,7 +312,7 @@ test-ssh-host: $(B)/font6x10.c | $(B)
 		$(addprefix kernel/, sha256.c config.c x25519.c sha512.c poly1305.c ed25519.c ssh.c saved.c vt.c)
 	python3 -m unittest tests.test_ssh
 
-test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-term \
+test-all: test test-hdboot test-crash test-scsi test-net test-tcp test-ssh test-disk test-desk test-wifi test-term test-ownkey \
           test-net-host test-misc-host test-crypto-host test-ssh-host test-vt-host test-fs-host test-helper
 
 run: $(B)/sshos-800k.dsk
@@ -425,6 +425,39 @@ test-wifi:
 #   lists the earlier connection, and connecting asks nothing.
 # In between and afterwards tools/sshosdisk.py, which shares no code with the
 # kernel, checks the volume and reads the files.
+# The key SSH OS makes for itself. First start: log in (with the test's key,
+# and the setting ssh_offer_key so that the question comes as it would after
+# a password), say yes: the SE makes its key, keeps it on its disk and adds
+# it to the account. Second start, from settings with no key in them: it
+# logs in with its own. The server keeps logins in a home folder of their
+# own (build-own/home), so nothing of yours is touched.
+OWN_RUN = "$(JUANRUN)" --rom "$(ROM)" --net 4 --hdd 1:build-own/disk.img --until SSHOS-BOOT-OK \
+	--cycles 3000000000 --prompt '> ' --prompt 'ready>' --prompt 'yes: ' --prompt 'SSH: ' \
+	--done 'stray interrupts'
+test-ownkey:
+	python3 tests/ssh_fixture.py build-own 22027 ownkey
+	$(MAKE) B=build-own CONFIG=build-own/config-ssh.txt build-own/sshos-800k.dsk
+	$(MAKE) B=build-own2 CONFIG=build-own/config-nokey.txt build-own2/sshos-800k.dsk
+	python3 tools/sshosdisk.py make build-own/disk.img 4 --blank
+	@: > build-own/sshd.log; /usr/sbin/sshd -D -E "$(CURDIR)/build-own/sshd.log" \
+		-f "$(CURDIR)/build-own/sshd/sshd_config" & pid=$$!; \
+	trap "kill $$pid 2>/dev/null" EXIT; sleep 1; \
+	$(OWN_RUN) --floppy build-own/sshos-800k.dsk --out build-own/first \
+		--type 'format 1\nyes\nssh\n\p\s\n\pecho one-$$((6*7))\nexit\n\puptime\n' && \
+	$(OWN_RUN) --floppy build-own2/sshos-800k.dsk --out build-own/second \
+		--type 'ssh\necho two-$$((7*7))\nexit\n\puptime\n'
+	@echo "--- first start ---"; sed -n '/^> ssh/,$$p' build-own/first.serial.txt
+	@echo "--- second start ---"; sed -n '/^> ssh/,$$p' build-own/second.serial.txt
+	@grep -q 'SSH: no password next time' build-own/first.serial.txt
+	@grep -q 'Done: no password next time' build-own/first.serial.txt
+	@grep -q '^one-42' build-own/first.serial.txt
+	@grep -q '^two-49' build-own/second.serial.txt
+	@if grep -q 'SSH: ' build-own/second.serial.txt; then echo "the second start asked something"; exit 1; fi
+	@grep -c 'SSH-OS$$' build-own/home/.ssh/authorized_keys | grep -qx 1
+	@test "$$(grep -c 'Accepted publickey' build-own/sshd.log)" = 2
+	@python3 tools/sshosdisk.py ls build-own/disk.img | grep -q 'KEY.TXT'
+	@echo "Own key test passed."
+
 DISK_RUN = "$(JUANRUN)" --rom "$(ROM)" --floppy build-disk/sshos-800k.dsk --net 4 \
 	--hdd 1:build-disk/disk.img --until SSHOS-BOOT-OK --cycles 3000000000 \
 	--prompt '> ' --prompt 'ready>' --prompt 'yes: ' --prompt 'SSH: ' --prompt 'DESK: ' --prompt 'home screen.' \

@@ -73,6 +73,9 @@ static void close(void)
 
 /* One turn of waiting: 1 = the main button or Return, -1 = Cancel or Esc,
  * 2 = another key (in *key), 0 = nothing yet. */
+static u8 editing;              /* the window has a text field: arrows and other clicks count */
+static int turn_x, turn_y;      /* where such a click was */
+
 static int turn(u32 *clicks, u8 *key)
 {
     int ev, x, y;
@@ -90,6 +93,11 @@ static int turn(u32 *clicks, u8 *key)
             if (!one_button && x >= no_x() && x < no_x() + BTN_W)
                 return -1;
         }
+        if (editing) {          /* 4 = a click somewhere else: in the field, perhaps */
+            turn_x = x;
+            turn_y = y;
+            return 4;
+        }
     }
     ev = kbd_get_event();
     if (ev < 0) {
@@ -98,6 +106,10 @@ static int turn(u32 *clicks, u8 *key)
     }
     bar_work();
     c = (u8)(ev & 0xFF);
+    if (editing && !(ev & 0x8000) && !c && (((ev >> 8) & 0x7F) == 0x3B || ((ev >> 8) & 0x7F) == 0x3C)) {
+        *key = (u8)((ev >> 8) & 0x7F);  /* 3 = the Left or Right arrow, by its key number */
+        return 3;
+    }
     if ((ev & 0x8000) || !c)
         return 0;
     if (c == 0x1B)
@@ -127,27 +139,48 @@ static void fitted(int x, int y, const char *s, int chars, int bold)
 #define PW_H        124
 #define PW_DOTS     33          /* how many fit in the field */
 
-static void draw_dots(int len, int caret)
-{
-    int x = box_x + 16, y = box_y + 50, i, shown = len > PW_DOTS ? PW_DOTS : len;
+static int pw_first;            /* the first dot that shows, when there are more than fit */
 
+/* letters dots, with the caret before dot number at. */
+static void draw_dots(int letters, int at, int caret)
+{
+    int x = box_x + 16, y = box_y + 50, i;
+
+    if (at < pw_first)
+        pw_first = at;
+    if (at > pw_first + PW_DOTS)
+        pw_first = at - PW_DOTS;
+    if (letters <= PW_DOTS)
+        pw_first = 0;
     gfx_begin();
     gfx_fill(x + 2, y + 2, PW_W - 36, 18, GFX_WHITE);
-    for (i = 0; i < shown; i++) {
-        gfx_fill(x + 9 + i * 8, y + 8, 3, 5, GFX_BLACK);
-        gfx_fill(x + 8 + i * 8, y + 9, 5, 3, GFX_BLACK);
+    for (i = pw_first; i < letters && i < pw_first + PW_DOTS; i++) {
+        gfx_fill(x + 9 + (i - pw_first) * 8, y + 8, 3, 5, GFX_BLACK);
+        gfx_fill(x + 8 + (i - pw_first) * 8, y + 9, 5, 3, GFX_BLACK);
     }
     if (caret)
-        gfx_fill(x + 8 + shown * 8, y + 4, 1, 14, GFX_BLACK);
+        gfx_fill(x + 7 + (at - pw_first) * 8, y + 4, 1, 14, GFX_BLACK);
     gfx_end();
 }
 
+/* How many letters (not bytes) are in the first n bytes of line. */
+static int letters_in(const char *line, int n)
+{
+    int i, count = 0;
+
+    for (i = 0; i < n; i++)
+        if (((u8)line[i] & 0xC0) != 0x80)
+            count++;
+    return count;
+}
+
 /* The password of user at host, into line (max bytes), nothing of it shown
- * but a dot a letter. Returns its length, or -1 if the answer was Cancel. */
+ * but a dot a letter. The caret moves by the arrows or a click, and typing
+ * and Delete happen where it is. Returns the length, or -1 for Cancel. */
 int ask_password(const char *user, const char *host, char *line, int max)
 {
     u32 clicks = mouse.clicks, blink = ticks;
-    int len = 0, letters = 0, caret = 1, r, i;
+    int len = 0, at = 0, caret = 1, r, want;
     char who[100];
     u8 key = 0;
 
@@ -162,33 +195,49 @@ int ask_password(const char *user, const char *host, char *line, int max)
     fitted(box_x + 16, box_y + 30, who, 44, 0);
     gfx_fill(box_x + 16, box_y + 50, PW_W - 32, 22, GFX_BLACK);
     gfx_end();
-    draw_dots(0, 1);
+    line[0] = 0;
+    pw_first = 0;
+    draw_dots(0, 0, 1);
     note("password");
+    editing = 1;
     for (;;) {
         r = turn(&clicks, &key);
         if (r == 0 && ticks - blink >= 30) {
             blink = ticks;
             caret = !caret;
-            draw_dots(letters, caret);
+            draw_dots(letters_in(line, len), letters_in(line, at), caret);
         }
         if (r == -1) {
             memset(line, 0, (size_t)max);
+            editing = 0;
             close();
             return -1;
         }
         if (r == 1) {
             line[len] = 0;
+            editing = 0;
             close();
             return len;
         }
-        if (r != 2 || !kbd_line_key(line, &len, max, key))
+        if (r == 4) {           /* a click in the field puts the caret between the dots there */
+            if (turn_y < box_y + 50 || turn_y >= box_y + 72 || turn_x < box_x + 16 ||
+                turn_x >= box_x + PW_W - 16)
+                continue;
+            want = pw_first + (turn_x - (box_x + 24) + 4) / 8;
+            if (want < 0)
+                want = 0;
+            for (at = 0; at < len && want > 0; want--)
+                for (at++; at < len && ((u8)line[at] & 0xC0) == 0x80; at++)
+                    ;
+        } else if (r == 3) {
+            if (!kbd_line_edit(line, &len, &at, max, 0, key))
+                continue;
+        } else if (r != 2 || !kbd_line_edit(line, &len, &at, max, key, 0)) {
             continue;
-        for (letters = 0, i = 0; i < len; i++)
-            if (((u8)line[i] & 0xC0) != 0x80)
-                letters++;
+        }
         caret = 1;
         blink = ticks;
-        draw_dots(letters, caret);
+        draw_dots(letters_in(line, len), letters_in(line, at), caret);
     }
 }
 
@@ -212,6 +261,38 @@ int ask_trust(const char *host, const char *print)
     gfx_text(x, y + 90, "Trust it only if the server shows the same.", 0, 1, 0);
     gfx_end();
     note("new server");
+    while ((r = turn(&clicks, &key)) == 0 || r == 2)
+        ;
+    close();
+    return r == 1;
+}
+
+/* ------------------------------------------------- no password next time? -- */
+
+/* After a log-in by password: shall this Macintosh's own key be added to
+ * the account, so that the next log-in needs none? make: the key has yet
+ * to be made, which takes a while. 1 = yes. */
+int ask_keyless(const char *user, const char *host, int make)
+{
+    u32 clicks = mouse.clicks;
+    int r, x, y;
+    u8 key;
+
+    open(372, 156, "No password next time?", "Yes");
+    x = box_x + 16;
+    y = box_y;
+    gfx_begin();
+    gfx_text(x, y + 30, "Log in to", 0, 1, 0);
+    fitted(x + gfx_text_width("Log in to ", 1), y + 30, host, 28, 1);
+    gfx_text(x, y + 44, "as", 0, 1, 0);
+    fitted(x + gfx_text_width("as ", 1), y + 44, user, 28, 1);
+    gfx_text(x, y + 58, "without a password from now on?", 0, 1, 0);
+    gfx_text(x, y + 80, make ? "This Macintosh makes a key of its own (about 15" :
+             "This Macintosh's own key is added to your account", 0, 1, 0);
+    gfx_text(x, y + 92, make ? "seconds, once) and adds it to your account there." :
+             "there. The password itself is not kept anywhere.", 0, 1, 0);
+    gfx_end();
+    note("no password next time?");
     while ((r = turn(&clicks, &key)) == 0 || r == 2)
         ;
     close();

@@ -154,6 +154,7 @@ void bar_panel(void);           /* open the network panel */
 /* ask.c: SSH's questions, each in a small window. */
 int  ask_password(const char *user, const char *host, char *line, int max);  /* length, or -1 */
 int  ask_trust(const char *host, const char *print);                         /* 1 = trust it */
+int  ask_keyless(const char *user, const char *host, int make);     /* no password next time? 1 = yes */
 void ask_message(const char *title, const char *const *lines, int n);         /* with an OK button */
 int  connect_run(char *target);     /* connect.c: SSH from the home screen; 1 = never got in */
 enum { KNOCK_ANSWERS, KNOCK_NO_ANSWER, KNOCK_NO_SSH, KNOCK_NO_NAME, KNOCK_NO_NETWORK };
@@ -164,6 +165,7 @@ extern void (*ssh_end_hook)(void);              /* and when the session is over 
 extern u8 ssh_ended_well;                       /* the last session ended with nothing to report */
 void ask_button(int x, int y, const char *s, int main_one);
 int  kbd_line_key(char *line, int *len, int max, u8 c);     /* ssh.c: 1 added, -1 removed, 0 */
+int  kbd_line_edit(char *line, int *len, int *at, int max, u8 c, u8 raw);   /* the same with a caret: 1 text, 2 caret, 0 */
 void bar_volume_step(void);     /* one step louder each time, then off */
 void bar_volume_change(int by); /* louder or quieter, stopping at 0 and 7 */
 
@@ -333,6 +335,10 @@ const char *fs_strerror(int err);
 void saved_start(void);         /* find the disk and read everything; only the first call does anything */
 int  hosts_known(const char *host, const char *print);  /* 1 yes, 0 never seen, -1 another key on record */
 int  hosts_add(const char *host, const char *print);    /* 0 if it reached the disk */
+int  own_key_get(u8 *key64);    /* this Macintosh's own SSH key, if it has made one: 1 = yes */
+int  own_key_keep(const u8 *key64);     /* 0 if it reached the disk */
+int  own_key_refused(const char *who);  /* adding it to "user@host" was turned down before */
+void own_key_refuse(const char *who);
 #define RECENT_MAX  8
 int  recent_count(void);
 const char *recent_get(int i);          /* "user@host" or "user@host:port", newest first */

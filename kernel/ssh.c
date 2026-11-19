@@ -98,6 +98,9 @@ static struct {
     u8 chan_open, chan_reply, chan_closed, close_sent, have_exit;
     u32 exit_status;
     u8 log;                     /* setting "termlog": copy the shell's output to the serial port */
+    u8 quiet;                   /* what the channel says is not for the screen (a command of ours) */
+    u8 by_password;             /* logged in by typing the password */
+    u8 own_key_used;            /* the key that was tried was this Macintosh's own */
 } ssh;
 
 static u8 rx[RX_MAX];
@@ -561,6 +564,69 @@ static int known_host(const char *host, const char *print)
     return found ? found : hosts_known(host, print);
 }
 
+/* Edit a line of text in a field: the line (len bytes of at most max, kept
+ * closed with a 0), the caret before byte *atp, and one key: its character
+ * c, or 0 and its key number raw for the Left and Right arrows. Typing and
+ * Delete happen at the caret. Accented letters are UTF-8 and count as one.
+ * Returns 1 if the text changed, 2 if only the caret moved, 0 if nothing. */
+int kbd_line_edit(char *line, int *lenp, int *atp, int max, u8 c, u8 raw)
+{
+    int len = *lenp, at = *atp, n = 0, from;
+    char add[3];
+
+    if (!c && (raw == 0x3B || raw == 0x3C)) {
+        if (raw == 0x3B) {
+            if (at == 0)
+                return 0;
+            for (at--; at > 0 && ((u8)line[at] & 0xC0) == 0x80; at--)
+                ;
+        } else {
+            if (at >= len)
+                return 0;
+            for (at++; at < len && ((u8)line[at] & 0xC0) == 0x80; at++)
+                ;
+        }
+        *atp = at;
+        return 2;
+    }
+    if (c == '\b') {
+        if (at == 0)
+            return 0;
+        for (from = at - 1; from > 0 && ((u8)line[from] & 0xC0) == 0x80; from--)
+            ;
+        memmove(line + from, line + at, (u32)(len - at));
+        len -= at - from;
+        line[len] = 0;
+        *lenp = len;
+        *atp = from;
+        return 1;
+    }
+    if (c < 32 || c == 127)
+        return 0;
+    if (c < 0x80) {
+        add[n++] = (char)c;
+    } else {
+        u32 cp = c >= 0xA0 ? c : charset_extra[c - 0x80];
+
+        if (cp >= 0x800) {
+            add[n++] = (char)(0xE0 | (cp >> 12));
+            add[n++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        } else {
+            add[n++] = (char)(0xC0 | (cp >> 6));
+        }
+        add[n++] = (char)(0x80 | (cp & 0x3F));
+    }
+    if (len + n > max - 1)
+        return 0;
+    memmove(line + at + n, line + at, (u32)(len - at));
+    memcpy(line + at, add, (u32)n);
+    len += n;
+    line[len] = 0;
+    *lenp = len;
+    *atp = at + n;
+    return 1;
+}
+
 /* Take one typed character into a line of max bytes: Delete removes the
  * last one, anything printable is added (accented letters as UTF-8).
  * Returns 1 if a character was added, -1 if one was removed, 0 if nothing
@@ -975,6 +1041,11 @@ static int authenticate(const char *user, const char *host)
         else
             have_key = 1;
     }
+    /* Otherwise the key this Macintosh made for itself, if it has. */
+    if (!have_key && own_key_get(key)) {
+        have_key = 1;
+        ssh.own_key_used = 1;
+    }
 
     /* Ask first whether the server would take our key: signing is slow. */
     if (have_key) {
@@ -1014,7 +1085,7 @@ static int authenticate(const char *user, const char *host)
     memset(key, 0, sizeof key);
     if (r != AUTH_NO)
         return r == AUTH_YES ? 0 : r < 0 ? r : fail("unexpected answer while logging in");
-    if (have_key)
+    if (have_key && !ssh.own_key_used)
         kputs("The server does not accept the key in ssh_key for this user.\n");
 
     for (tries = 0; tries < 3 && list_has((const u8 *)methods, strlen(methods), "password"); tries++) {
@@ -1029,8 +1100,10 @@ static int authenticate(const char *user, const char *host)
         memset(tx, 0, sizeof tx);
         if (r == 0)
             r = auth_answer();
-        if (r == AUTH_YES)
+        if (r == AUTH_YES) {
+            ssh.by_password = 1;
             return 0;
+        }
         if (r != AUTH_NO)
             return r < 0 ? r : fail("the server wants the password changed; do that from another computer");
         kputs("Not accepted.\n");
@@ -1105,7 +1178,8 @@ static int handle(int type, const char *host)
         text = get_string(&len);
         if (rbad)
             break;
-        vt_write(text, len);
+        if (!ssh.quiet)
+            vt_write(text, len);
         ssh.consumed += len;
         if (ssh.consumed >= CHAN_WINDOW / 2 && !ssh.chan_closed) {
             put_start(MSG_CHANNEL_WINDOW_ADJUST);
@@ -1166,6 +1240,131 @@ static int wait_for(const u8 *flag, const char *host)
         if (ssh.chan_closed)
             return fail("the server closed the session");
     }
+    return 0;
+}
+
+/* Run one command on the server, in a session of its own, and wait for it
+ * to end. What it prints is not shown. 0 = it ran and said all went well,
+ * 1 = it did not; below 0 the connection itself failed. */
+static int run_command(const char *host, const char *command)
+{
+    int r, ok;
+
+    ssh.quiet = 1;
+    put_start(MSG_CHANNEL_OPEN);
+    put_text("session");
+    put_u32(0);
+    put_u32(CHAN_WINDOW);
+    put_u32(CHAN_PACKET);
+    r = packet_send();
+    if (r == 0)
+        r = wait_for(&ssh.chan_open, host);
+    if (r == 0) {
+        put_start(MSG_CHANNEL_REQUEST);
+        put_u32(ssh.remote_chan);
+        put_text("exec");
+        put_u8(1);
+        put_text(command);
+        r = tx_overflow ? fail("the command is too long") : packet_send();
+    }
+    /* until the server closes it: the answer to "exec", the command's
+     * verdict and the end all come by themselves */
+    while (r == 0 && !ssh.chan_closed) {
+        r = packet_get(WAIT);
+        if (r >= 0)
+            r = handle(r, host);
+    }
+    ok = ssh.chan_reply == 1 && ssh.have_exit && ssh.exit_status == 0;
+    if (r == 0) {
+        put_start(MSG_CHANNEL_CLOSE);
+        put_u32(ssh.remote_chan);
+        r = packet_send();
+    }
+    /* the one channel is free again, for the shell */
+    ssh.chan_open = ssh.chan_reply = ssh.chan_closed = ssh.have_exit = 0;
+    ssh.consumed = 0;
+    ssh.quiet = 0;
+    return r < 0 ? r : r ? r : ok ? 0 : 1;
+}
+
+/* Logged in by password: offer to add this Macintosh's own key to the
+ * account, so that next time there is nothing to type. The key is made the
+ * first time it is wanted and kept on the SSH OS disk; the password is not
+ * kept anywhere. Whatever goes wrong here, the log-in itself stands: only
+ * a broken connection is passed on. */
+static int offer_key(const char *user, const char *host)
+{
+    static char who[112], command[280];
+    const char *setting = config_get("ssh_key"), *force = config_get("ssh_offer_key");
+    u8 key[64], blob[51];
+    char b64key[72];
+    int have = 0, r;
+    u32 n;
+
+    if (!(ssh.by_password || (force && force[0] == '1')) || !fs_mounted())
+        return 0;
+    n = strlen(user);
+    if (n + strlen(host) + 2 > sizeof who)
+        return 0;
+    memcpy(who, user, n);
+    who[n] = '@';
+    memcpy(who + n + 1, host, strlen(host) + 1);
+    if (own_key_refused(who))
+        return 0;
+    /* a key from the settings, if there is one, is the one to add */
+    if (setting && setting[0] && base64_decode(key, sizeof key, setting) == 64 && ssh.by_password)
+        have = 1;
+    else
+        have = own_key_get(key);
+    if (!ask_keyless(user, host, !have)) {
+        own_key_refuse(who);
+        memset(key, 0, sizeof key);
+        return 0;
+    }
+    if (!have) {
+        kputs("Making this Macintosh's own key");
+        rng_bytes(key, 32);
+        ed25519_public(key + 32, key);
+        kputc('\n');
+        if (crypto_stop) {
+            memset(key, 0, sizeof key);
+            return fail("stopped");
+        }
+        if (own_key_keep(key) != 0) {
+            kputs("The key could not be kept on the SSH OS disk; the password stays.\n");
+            memset(key, 0, sizeof key);
+            return 0;
+        }
+    }
+    /* the public half as OpenSSH writes it: "ssh-ed25519 AAAA... name" */
+    be32(blob, 11);
+    memcpy(blob + 4, name_ed25519, 11);
+    be32(blob + 15, 32);
+    memcpy(blob + 19, key + 32, 32);
+    memset(key, 0, sizeof key);
+    base64_encode(b64key, blob, sizeof blob);
+    {
+        static const char *const part[] = {
+            "umask 077; mkdir -p ~/.ssh; grep -qF '", 0, "' ~/.ssh/authorized_keys 2>/dev/null || "
+            "echo 'ssh-ed25519 ", 0, " SSH-OS' >> ~/.ssh/authorized_keys",
+        };
+        char *t = command;
+        int i;
+
+        for (i = 0; i < 5; i++) {
+            const char *p = part[i] ? part[i] : b64key;
+
+            while (*p)
+                *t++ = *p++;
+        }
+        *t = 0;
+    }
+    kputs("Adding the key to your account on the server\n");
+    r = run_command(host, command);
+    if (r < 0)
+        return r;
+    kputs(r == 0 ? "Done: no password next time.\n" :
+          "The server would not take it; the password stays.\n");
     return 0;
 }
 
@@ -1454,6 +1653,8 @@ void cmd_ssh(int argc, char **argv)
     r = key_exchange(host);
     if (r == 0)
         r = authenticate(user, host);
+    if (r == 0)
+        r = offer_key(user, host);
     if (r == 0)
         r = open_shell(host);
     if (r == 0) {

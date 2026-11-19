@@ -142,10 +142,18 @@ lists every command), Restart and Shut down.
 "New connection" under them. "New connection" has a Ping button (or Tab): it says whether the
 server answers and SSH is listening. Connect asks the same first, so a dead
 server is reported in about 4 seconds, before the slow key work.
-Up/Down and Return or a click connect; Delete forgets one.
+Up/Down and Return or a click connect. The small box with a cross at the
+end of a line, or Delete, forgets that connection, and with it what the SE
+kept about it: the server's fingerprint (unless another connection still
+goes there) and a "no" to logging in without a password, so both are asked
+again if you go back. The connection named by the setting `ssh` can be
+forgotten the same way; that empties the setting.
 
-In the New connection field a click or the Left and Right arrows move the
-caret. While it connects there is a Cancel button; Esc does the same, at any
+![The list of connections](docs/connections.png)
+
+In every text field (New connection, the password, a WiFi password) a click
+or the Left and Right arrows move the caret, and typing and Delete happen
+there. While it connects there is a Cancel button; Esc does the same, at any
 point, the slow key steps included.
 
 ![Ping in the New connection window](docs/ping.png)
@@ -247,6 +255,20 @@ gets lost.
 accept the key, the SE asks for the password in a small window (a dot for
 each letter).
 
+**No password next time.** After a log-in by password the SE asks whether to
+log in to that account without one from now on. On yes it makes an Ed25519
+key of its own (once, about 15 seconds), keeps it on the SSH OS disk
+(`KEY.TXT`) and adds its public half to `~/.ssh/authorized_keys` on the
+server, in a line ending in `SSH-OS`. The password is not kept anywhere. To
+cut the SE off from a server, delete that line there. A no is remembered
+(`NOKEY.TXT`), so it asks once for each account. Like a key in `config.txt`,
+the one on the SSH OS disk is unprotected: whoever has the card has it.
+
+This needs the SSH OS disk (the second image on the card, `HD1_512`), which
+is where the key lives. Without one the SE does not offer, and asks for the
+password every time. One key serves every server: forgetting a connection
+on the SE does not take the key out of that server's `authorized_keys`.
+
 **Is it the right server?** On the first connection the SE shows the
 fingerprint of the server's key and asks. The answer is kept on the SSH OS
 disk (`HOSTS.TXT`), so later connections do not ask, and a server that
@@ -340,6 +362,7 @@ make test-all
 |---|---|
 | `test`, `test-crash` | Boot, typing in the OSConsole (accents included), the crash screen |
 | `test-disk` | The SSH OS disk in the emulated SE: format, save, restart, read back; SSH asks about a server once only |
+| `test-ownkey` | The SE's own key: made, kept on its disk and added to an account on a real OpenSSH server, then used to log in with no key in the settings |
 | `test-fs-host` | The file system on this computer against a second implementation: every size, a full disk, power cuts while writing, disks that are not ours |
 | `test-scsi` | Bus scan, block read, write and read back, read speed |
 | `test-net`, `test-tcp` | Ping; a 256 KB download and a 32 KB echo with every byte checked |

@@ -3,6 +3,8 @@
  *
  *   HOSTS.TXT    servers whose key has been accepted: "host SHA256:..."
  *   RECENT.TXT   the last SSH connections, newest first: "user@host:port"
+ *   KEY.TXT      this Macintosh's own SSH key, made here: 128 hex digits
+ *   NOKEY.TXT    accounts where adding that key was offered and turned down
  *
  * Both are also kept in memory, so without an SSH OS disk they still work
  * until the next restart.
@@ -11,6 +13,9 @@
 
 #define HOSTS_FILE  "HOSTS.TXT"
 #define RECENT_FILE "RECENT.TXT"
+#define KEY_FILE    "KEY.TXT"
+#define NOKEY_FILE  "NOKEY.TXT"
+#define NOKEY_MAX   1024
 #define HOSTS_MAX   4096
 #define RECENT_LEN  112
 
@@ -135,12 +140,142 @@ void recent_add(const char *target)
     recent_save();
 }
 
+/* Take every line that is exactly `line`, or (with_more) that begins with
+ * it and a space, out of a file kept in memory; write it back if any went. */
+static void strike(char *text, u32 *lenp, const char *file, const char *line, int with_more)
+{
+    u32 n = strlen(line), at = 0, end, len = *lenp;
+    int any = 0;
+
+    while (at < len) {
+        for (end = at; end < len && text[end] != '\n'; end++)
+            ;
+        if ((end - at == n || (with_more && end - at > n && text[at + n] == ' ')) &&
+            memcmp(text + at, line, n) == 0) {
+            end = end < len ? end + 1 : len;
+            memmove(text + at, text + end, len - end);
+            len -= end - at;
+            any = 1;
+        } else {
+            at = end + 1;
+        }
+    }
+    *lenp = len;
+    if (any)
+        fs_write(file, text, len);
+}
+
+static char nokey[NOKEY_MAX];   /* accounts where adding our own key was turned down */
+static u32 nokey_len;
+
+/* Forget a connection, and with it what this Macintosh keeps about it: the
+ * server's fingerprint (unless another connection still goes there), so
+ * that it is shown and asked about again, and a "no" to adding our key to
+ * that account, so that this is offered again. */
 void recent_remove(int i)
 {
+    char who[RECENT_LEN], *host, *p;
+    int k, others = 0;
+    u32 n;
+
     if (i < 0 || i >= nrecent)
         return;
+    memcpy(who, recent[i], RECENT_LEN);
+    who[RECENT_LEN - 1] = 0;
     drop(i);
     recent_save();
+
+    for (p = who; *p && *p != ':'; p++)         /* without the port: "user@host" */
+        ;
+    *p = 0;
+    strike(nokey, &nokey_len, NOKEY_FILE, who, 0);
+    for (host = who; *host && *host != '@'; host++)
+        ;
+    if (!*host)
+        return;
+    host++;
+    n = strlen(host);
+    for (k = 0; k < nrecent; k++) {
+        for (p = recent[k]; *p && *p != '@'; p++)
+            ;
+        if (*p && memcmp(p + 1, host, n) == 0 && (p[1 + n] == 0 || p[1 + n] == ':'))
+            others++;
+    }
+    if (!others)
+        strike(hosts, &hosts_len, HOSTS_FILE, host, 1);
+}
+
+/* ----------------------------------------------------------- our own key -- */
+
+
+/* This Macintosh's own key (32 bytes of secret, then the public half), if
+ * one has been made and is on the disk. 1 = there it is. */
+int own_key_get(u8 *key64)
+{
+    char text[130];
+    u32 len, i;
+    int hi, lo;
+
+    if (!fs_mounted() || fs_read(KEY_FILE, text, sizeof text, &len) != 0 || len < 128)
+        return 0;
+    for (i = 0; i < 64; i++) {
+        hi = text[2 * i];
+        lo = text[2 * i + 1];
+        hi = hi >= '0' && hi <= '9' ? hi - '0' : hi >= 'a' && hi <= 'f' ? hi - 'a' + 10 : -1;
+        lo = lo >= '0' && lo <= '9' ? lo - '0' : lo >= 'a' && lo <= 'f' ? lo - 'a' + 10 : -1;
+        if (hi < 0 || lo < 0)
+            return 0;
+        key64[i] = (u8)(hi << 4 | lo);
+    }
+    memset(text, 0, sizeof text);
+    return 1;
+}
+
+/* Keep it. 0 if it reached the disk. */
+int own_key_keep(const u8 *key64)
+{
+    static const char hex[] = "0123456789abcdef";
+    char text[129];
+    int i, r;
+
+    if (!fs_mounted())
+        return -1;
+    for (i = 0; i < 64; i++) {
+        text[2 * i] = hex[key64[i] >> 4];
+        text[2 * i + 1] = hex[key64[i] & 15];
+    }
+    text[128] = '\n';
+    r = fs_write(KEY_FILE, text, 129);
+    memset(text, 0, sizeof text);
+    return r;
+}
+
+/* Was adding the key to this account ("user@host") turned down before? */
+
+int own_key_refused(const char *who)
+{
+    u32 n = strlen(who), at = 0, end;
+
+    while (at < nokey_len) {
+        for (end = at; end < nokey_len && nokey[end] != '\n'; end++)
+            ;
+        if (end - at == n && memcmp(nokey + at, who, n) == 0)
+            return 1;
+        at = end + 1;
+    }
+    return 0;
+}
+
+void own_key_refuse(const char *who)
+{
+    u32 n = strlen(who);
+
+    if (own_key_refused(who) || nokey_len + n + 1 > NOKEY_MAX)
+        return;
+    memcpy(nokey + nokey_len, who, n);
+    nokey_len += n + 1;
+    nokey[nokey_len - 1] = '\n';
+    fs_write(NOKEY_FILE, nokey, nokey_len);
 }
 
 /* ------------------------------------------------------------------ start -- */
@@ -167,6 +302,11 @@ void saved_start(void)
         if (len && hosts[len - 1] != '\n')      /* edited by hand, perhaps */
             hosts[len++] = '\n';
         hosts_len = len;
+    }
+    if (fs_read(NOKEY_FILE, nokey, NOKEY_MAX - 1, &len) == 0) {
+        if (len && nokey[len - 1] != '\n')
+            nokey[len++] = '\n';
+        nokey_len = len;
     }
     if (fs_read(RECENT_FILE, text, sizeof text - 1, &len) == 0) {
         /* The file has the newest first; put_first wants the oldest first. */

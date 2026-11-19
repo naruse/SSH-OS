@@ -44,7 +44,8 @@ def prepare(directory, port, own_shell=False, extra=()):
         run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "sshos-test", "-f",
             os.path.join(directory, name))
     shutil.copy(os.path.join(directory, "userkey.pub"), os.path.join(directory, "authorized_keys"))
-    lines = [
+    # extra goes first: where a setting is given twice, sshd takes the first
+    lines = list(extra) + [
         "Port %d" % port, "ListenAddress 127.0.0.1",
         # quoted: the project folder's name may have a space in it
         'HostKey "%s"' % os.path.join(directory, "hostkey"),
@@ -53,8 +54,8 @@ def prepare(directory, port, own_shell=False, extra=()):
         "StrictModes no", "UsePAM no", "PubkeyAuthentication yes",
         "PasswordAuthentication yes", "KbdInteractiveAuthentication no",
         "AcceptEnv LANG LC_*", "LogLevel DEBUG3",
-    ] + list(extra)
-    if not own_shell:
+    ]
+    if not own_shell and not any(x.startswith("ForceCommand") for x in extra):
         lines.append("ForceCommand PS1='ready> ' /bin/sh")
     with open(os.path.join(directory, "sshd_config"), "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -70,8 +71,35 @@ def main():
         sys.exit(__doc__.strip())
     directory, port = sys.argv[1], int(sys.argv[2])
     own_shell = "shell" in sys.argv[3:]
+    own_key = "ownkey" in sys.argv[3:]
     os.makedirs(directory, exist_ok=True)
-    known, key, _ = prepare(os.path.join(directory, "sshd"), port, own_shell)
+    extra = ()
+    if own_key:
+        # For the test of the key SSH OS makes for itself: logins live in a
+        # home folder of their own here, so that what the SE adds to
+        # ~/.ssh/authorized_keys lands there and not in yours; that file
+        # counts as well as the test's own; and a command the SE sends is
+        # run instead of the usual shell.
+        home = os.path.join(os.path.abspath(directory), "home")
+        shutil.rmtree(home, ignore_errors=True)
+        os.makedirs(home)
+        extra = (
+            'SetEnv "HOME=%s"' % home,
+            'AuthorizedKeysFile "%s" "%s"' % (
+                os.path.join(os.path.abspath(directory), "sshd", "authorized_keys"),
+                os.path.join(home, ".ssh", "authorized_keys")),
+            "ForceCommand if [ -n \"$SSH_ORIGINAL_COMMAND\" ]; then /bin/sh -c \"$SSH_ORIGINAL_COMMAND\"; "
+            "else PS1='ready> ' exec /bin/sh; fi",
+        )
+    known, key, _ = prepare(os.path.join(directory, "sshd"), port, own_shell, extra)
+    if own_key:
+        # a second set of settings without the test's key: only the SE's own will do
+        with open(os.path.join(directory, "config-nokey.txt"), "w") as f:
+            f.write("\n".join([
+                "network = 10.0.0.2 255.0.0.0 10.0.0.1 1.1.1.1",
+                "ssh = %s@127.0.0.1:%d" % (getpass.getuser(), port),
+                known, "termlog = 1\nstart = shell", ""]))
+        known += "\nssh_offer_key = 1"
     with open(os.path.join(directory, "config-ssh.txt"), "w") as f:
         f.write("\n".join([
             "# Made by tests/ssh_fixture.py: reach the test server on this Mac from Snow.",

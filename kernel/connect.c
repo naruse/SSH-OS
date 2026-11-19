@@ -313,6 +313,8 @@ int connect_run(char *target)
         net_abort_check = abort_check;
         kbd_escape = 0;
         serial_puts("DESK: connecting cancelled\n");
+        while (kbd_get_event() >= 0)    /* the Esc itself: it was for this screen, not the next */
+            ;
         return 1;
     }
     if (i != KNOCK_ANSWERS) {
@@ -348,6 +350,8 @@ int connect_run(char *target)
             cancelled = 1;
     if (cancelled && !logged_in) {
         serial_puts("DESK: connecting cancelled\n");
+        while (kbd_get_event() >= 0)    /* the Esc itself: it was for this screen, not the next */
+            ;
         return 1;               /* back to where it was asked for, with nothing to say */
     }
 

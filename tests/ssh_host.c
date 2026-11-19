@@ -341,6 +341,12 @@ int ask_password(const char *user, const char *host, char *line, int max)
     return kbd_ask_line(line, max, 0);
 }
 
+int ask_keyless(const char *user, const char *host, int make)
+{
+    (void)user; (void)host; (void)make;
+    return 0;
+}
+
 int ask_trust(const char *host, const char *print)
 {
     char answer[8];

@@ -101,6 +101,25 @@ static const u16 dot_full[8] = {0x3C00, 0x7E00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 
 static const u16 dot_ring[8] = {0x3C00, 0x4200, 0x8100, 0x8100, 0x8100, 0x8100, 0x4200, 0x3C00};
 static const u16 dot_wait[8] = {0x0000, 0x0000, 0x0000, 0xDB00, 0xDB00, 0x0000, 0x0000, 0x0000};
 
+#define FORGET_X    (LIST_X + LIST_W - 18)
+
+/* Can this line be forgotten? All but "New connection". */
+static int can_forget(int i)
+{
+    return i < nchoices - 1;
+}
+
+/* Forget line i. The one that comes from the setting "ssh" goes by emptying
+ * that setting, which is kept on the SSH OS disk like any other change. */
+static void forget(int i)
+{
+    if (has_setting && i == 0)
+        config_store("ssh", "");
+    else
+        recent_remove(i - has_setting);
+    note("forgotten");
+}
+
 static void draw_choice(int i, int on)
 {
     char shown[48];
@@ -113,6 +132,16 @@ static void draw_choice(int i, int on)
     gfx_begin();
     gfx_fill(LIST_X, y, LIST_W, LIST_ROW, on ? GFX_BLACK : GFX_WHITE);
     gfx_text(LIST_X + 8, y + 3, shown, on, 1, i == nchoices - 1);
+    if (can_forget(i)) {        /* a small box with a cross: forget this one */
+        int x = FORGET_X, k;
+
+        gfx_fill(x, y + 2, 12, 12, on ? GFX_WHITE : GFX_BLACK);
+        gfx_fill(x + 1, y + 3, 10, 10, on ? GFX_BLACK : GFX_WHITE);
+        for (k = 0; k < 6; k++) {
+            gfx_fill(x + 3 + k, y + 5 + k, 1, 1, on ? GFX_WHITE : GFX_BLACK);
+            gfx_fill(x + 8 - k, y + 5 + k, 1, 1, on ? GFX_WHITE : GFX_BLACK);
+        }
+    }
     gfx_end();
 }
 
@@ -178,7 +207,13 @@ static int choose_target(void)
             hit = (mouse.click_y - LIST_Y) / LIST_ROW;
             if (mouse.click_y >= LIST_Y && hit < nchoices && mouse.click_x >= LIST_X &&
                 mouse.click_x < LIST_X + LIST_W) {
-                return hit;
+                if (!(can_forget(hit) && mouse.click_x >= FORGET_X - 3))
+                    return hit;
+                forget(hit);                            /* its box with the cross */
+                build_choices();
+                if (at >= nchoices)
+                    at = nchoices - 1;
+                draw_choices(at);
             }
         }
         ev = kbd_get_event();
@@ -200,8 +235,8 @@ static int choose_target(void)
         } else if (ch == 0x1B) {
             kbd_escape = 0;
             return -1;
-        } else if (ch == '\b' && at < nchoices - 1 && !(has_setting && at == 0)) {
-            recent_remove(at - has_setting);            /* forget this one */
+        } else if (ch == '\b' && can_forget(at)) {
+            forget(at);
             build_choices();
             if (at >= nchoices)
                 at = nchoices - 1;
