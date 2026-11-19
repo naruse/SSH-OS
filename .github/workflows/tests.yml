@@ -9,7 +9,7 @@
 # repository: the job takes it from a private repository named by the
 # variable ROM_REPO, with that repository's read-only deploy key in the secret
 # ROM_REPO_KEY (see
-# "Tests on GitHub" in the README). Without those two it is skipped, and it
+# "Tests on GitHub" in docs/BUILDING.md). Without those two it is skipped, and it
 # never runs for pull requests, which are not given secrets.
 name: Tests
 

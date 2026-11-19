@@ -8,7 +8,7 @@
 network = dhcp
 
 # SSH: where "ssh" without arguments logs in, as USER@HOST or USER@HOST:PORT.
-# ssh_key is the SE's own key, made with tools/sshkey.py (see the README);
+# ssh_key is the SE's own key, made with tools/sshkey.py (see docs/USING.md);
 # without it the SE asks for the password. ssh_hosts lists servers whose key
 # is known, as pairs: HOST FINGERPRINT. It is only needed without an SSH OS
 # disk: with one, the SE remembers the keys you accept.
