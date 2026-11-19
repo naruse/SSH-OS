@@ -4,7 +4,7 @@
 
 #include "types.h"
 
-#define SSHOS_VERSION "0.1"
+#define SSHOS_VERSION "0.2"
 
 /* Values captured from the ROM's globals at start-up (machine.c). */
 struct machine {
