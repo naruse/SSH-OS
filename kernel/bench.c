@@ -103,3 +103,74 @@ void cmd_bench(void)
     rate("Poly1305", 16 * sizeof buf, ticks - t0);
     kputs("BENCH-DONE\n");
 }
+
+/* How fast the terminal draws: text that scrolls, text that stays in place,
+ * and text with a change of style every few letters, as full-screen
+ * programs send it. The same figures as above, to set beside the ciphers. */
+/* Feed the terminal a made-up screenful, a kilobyte at a time as SSH
+ * would hand it over. */
+static u8 feed[1024];
+
+static u32 feed_all(u32 total)
+{
+    u32 t0 = next_tick(), left;
+
+    for (left = total; left; left -= left < sizeof feed ? left : sizeof feed)
+        vt_write(feed, left < sizeof feed ? left : sizeof feed);
+    return ticks - t0;
+}
+
+void cmd_bench_term(void)
+{
+    u32 t0, dt, i, n;
+
+    for (i = 0; i < 80; i++)
+        buf[i] = (u8)('A' + i % 26 + (i & 32));
+
+    /* lines of 80 letters, each ending in a new line: 1 KB is 12 of them */
+    for (i = 0; i < sizeof feed; i++)
+        feed[i] = i % 82 == 80 ? '\r' : i % 82 == 81 ? '\n' : buf[i % 82];
+    vt_reset();
+    dt = feed_all(32 * 1024);
+    vt_end();
+    con_clear();
+    rate("Terminal, lines that scroll", 32 * 1024, dt);
+
+    /* the same lines written over each other at the top */
+    for (i = 0; i < sizeof feed; i++)
+        feed[i] = i % 83 == 80 ? '\033' : i % 83 == 81 ? '[' : i % 83 == 82 ? 'E' : buf[i % 83];
+    memcpy(feed, "\033[H", 3);
+    vt_reset();
+    dt = feed_all(32 * 1024);
+    vt_end();
+    con_clear();
+    rate("Terminal, text in place", 32 * 1024, dt);
+
+    /* a change of style every four letters, as full-screen programs send */
+    for (i = 0; i < sizeof feed; i++)
+        feed[i] = "\033[1mabcd\033[0mefgh"[i % 16];
+    memcpy(feed, "\033[H", 3);
+    vt_reset();
+    dt = feed_all(32 * 1024);
+    vt_end();
+    con_clear();
+    rate("Terminal, styled text in place", 32 * 1024, dt);
+
+    /* the parts: the screen alone, one character at a time and a row at a time */
+    t0 = next_tick();
+    for (i = 0; i < 12; i++)
+        for (n = 0; n < 32; n++)
+            con_draw(0, (int)n, buf, 85, 0);
+    rate("Screen only, rows of 85", 12 * 32 * 85, ticks - t0);
+    t0 = next_tick();
+    for (i = 0; i < 12 * 32 * 85; i++)
+        con_draw((int)(i % 85), (int)(i / 85 % 32), buf + i % 80, 1, 0);
+    rate("Screen only, one at a time", 12 * 32 * 85, ticks - t0);
+    t0 = next_tick();
+    for (i = 0; i < 31; i++)
+        con_scroll(0, 31, 1);
+    dt = ticks - t0;
+    kprintf("Scrolling 31 lines: %lu ticks.\n", dt);
+    con_clear();
+    kputs("BENCH-DONE\n");
+}

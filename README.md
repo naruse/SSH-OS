@@ -375,6 +375,13 @@ every byte passes through both ChaCha20 and Poly1305; typing feels immediate.
 Most servers close a connection that has not logged in within two minutes,
 so there is room, but not much.
 
+The terminal is quick enough not to hold that up: `termbench` in the
+OSConsole times it at 6 KB per second for lines that scroll and 5 to 8 for
+text drawn in place. It draws four characters at a time, which are exactly
+three bytes of the screen, and only once all the bytes in hand have been
+read, so a cell written several times is drawn once and a page that scrolls
+by moves the screen once.
+
 The plan is to hand these calculations to the BlueSCSI's own processor,
 which does each in a few thousandths of a second; connecting would then take
 a second or two. The SE's side is ready for that: the four slow calculations

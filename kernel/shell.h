@@ -30,5 +30,6 @@ void cmd_desk(void);
 
 /* bench.c */
 void cmd_bench(void);
+void cmd_bench_term(void);
 
 #endif

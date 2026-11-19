@@ -23,6 +23,17 @@ void con_draw(int col, int row, const u8 *text, int n, u8 attr)
     }
 }
 
+void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at)
+{
+    /* as the real one does: whole fours */
+    for (from &= ~3; from < to || (from & 3); from++) {
+        if (from >= CON_COLS)
+            break;
+        glass[row][from] = ch[from];
+        looks[row][from] = at[from];
+    }
+}
+
 void con_fill(int col, int row, int n, u8 ch, u8 attr)
 {
     for (; n > 0 && col < CON_COLS; n--, col++) {

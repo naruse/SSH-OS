@@ -889,6 +889,8 @@ static void run(char *line)
         cmd_tcptest(argc, argv);
     else if (shell_streq(cmd, "bench"))
         cmd_bench();
+    else if (shell_streq(cmd, "termbench"))
+        cmd_bench_term();
     else if (shell_streq(cmd, "font"))
         show_font();
     else if (shell_streq(cmd, "clear"))

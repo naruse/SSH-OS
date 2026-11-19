@@ -183,6 +183,7 @@ void con_cursor_toggle(void);
 #define CON_BOLD        2
 #define CON_UNDERLINE   4
 void con_draw(int col, int row, const u8 *text, int n, u8 attr);
+void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at);     /* of a whole row; quick */
 void con_fill(int col, int row, int n, u8 ch, u8 attr);
 void con_scroll(int top, int bottom, int lines);    /* rows top..bottom; negative = down */
 void con_invert(int col, int row);                  /* flip one cell, e.g. for a cursor */

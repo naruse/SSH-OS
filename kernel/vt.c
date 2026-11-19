@@ -23,6 +23,8 @@
 struct page {
     u8 ch[ROWS][COLS];
     u8 at[ROWS][COLS];
+    u8 row[ROWS];               /* which of those is each row of the screen: scrolling turns
+                                 * this list round and moves no text */
 };
 
 enum { GROUND, ESC, ESC_ONE, CSI, STRING, STRING_ESC };
@@ -89,6 +91,53 @@ static void reply_num(u32 v)
 
 /* ------------------------------------------------------------- the glass -- */
 
+/* Nothing is drawn as it arrives. What changes is noted, a span to each
+ * row, and drawn when the bytes in hand have all been read (vt_write's
+ * end): a cell written five times is drawn once, cells are drawn in fours
+ * (con_draw_cells), and a page of text that scrolls by is moved on the
+ * screen once, not line by line. */
+static u8 dirty_from[ROWS], dirty_to[ROWS];     /* to <= from: nothing to draw */
+static u8 scrolled;             /* the whole screen is to move up by this many rows first */
+
+static void mark(int row, int from, int to)
+{
+    if (from < 0)
+        from = 0;
+    if (to > COLS)
+        to = COLS;
+    if (from >= to)
+        return;
+    if (dirty_to[row] <= dirty_from[row]) {
+        dirty_from[row] = (u8)from;
+        dirty_to[row] = (u8)to;
+        return;
+    }
+    if (from < dirty_from[row])
+        dirty_from[row] = (u8)from;
+    if (to > dirty_to[row])
+        dirty_to[row] = (u8)to;
+}
+
+/* Move the screen as far as the text has moved; the notes then fit it. */
+static void settle(void)
+{
+    if (scrolled)
+        con_scroll(0, ROWS - 1, scrolled);
+    scrolled = 0;
+}
+
+static void flush(void)
+{
+    int r;
+
+    settle();
+    for (r = 0; r < ROWS; r++)
+        if (dirty_to[r] > dirty_from[r]) {
+            con_draw_cells(r, dirty_from[r], dirty_to[r], vt.p->ch[vt.p->row[r]], vt.p->at[vt.p->row[r]]);
+            dirty_from[r] = dirty_to[r] = 0;
+        }
+}
+
 static void blank(int row, int from, int n)
 {
     u8 a = attr_blank();
@@ -99,23 +148,15 @@ static void blank(int row, int from, int n)
         n = COLS - from;
     if (n <= 0)
         return;
-    memset(vt.p->ch[row] + from, ' ', (u32)n);
-    memset(vt.p->at[row] + from, a, (u32)n);
-    con_fill(from, row, n, ' ', a);
+    memset(vt.p->ch[vt.p->row[row]] + from, ' ', (u32)n);
+    memset(vt.p->at[vt.p->row[row]] + from, a, (u32)n);
+    mark(row, from, from + n);
 }
 
 /* Draw part of a row again from what is kept. */
 static void redraw(int row, int from, int to)
 {
-    int start;
-    u8 a;
-
-    while (from < to) {
-        a = vt.p->at[row][from];
-        for (start = from; from < to && vt.p->at[row][from] == a; from++)
-            ;
-        con_draw(start, row, vt.p->ch[row] + start, from - start, a);
-    }
+    mark(row, from, to);
 }
 
 static void redraw_all(void)
@@ -130,26 +171,49 @@ static void redraw_all(void)
 static void scroll(int top, int bot, int n)
 {
     int height = bot - top + 1, r, count = n < 0 ? -n : n;
+    u8 keep[ROWS];
 
     if (height <= 0 || n == 0)
         return;
     if (count > height)
         count = height;
+    /* The rows themselves stay where they are in memory: only the list of
+     * which is where is turned round. The ones that drop off one end come
+     * in at the other, to be blanked below. */
     if (n > 0) {
-        memmove(vt.p->ch[top], vt.p->ch[top + count], (u32)(height - count) * COLS);
-        memmove(vt.p->at[top], vt.p->at[top + count], (u32)(height - count) * COLS);
+        memcpy(keep, vt.p->row + top, (u32)count);
+        memmove(vt.p->row + top, vt.p->row + top + count, (u32)(height - count));
+        memcpy(vt.p->row + bot + 1 - count, keep, (u32)count);
     } else {
-        memmove(vt.p->ch[top + count], vt.p->ch[top], (u32)(height - count) * COLS);
-        memmove(vt.p->at[top + count], vt.p->at[top], (u32)(height - count) * COLS);
+        memcpy(keep, vt.p->row + bot + 1 - count, (u32)count);
+        memmove(vt.p->row + top + count, vt.p->row + top, (u32)(height - count));
+        memcpy(vt.p->row + top, keep, (u32)count);
     }
-    con_scroll(top, bot, n > 0 ? count : -count);
+    /* The screen: the usual case, the whole of it moving up, waits for the
+     * end of what is being read; anything else is done now. The notes of
+     * what is still to draw move with their rows either way, and the rows
+     * that come in are clear on the screen already. */
+    if (n > 0 && top == 0 && bot == ROWS - 1 && scrolled + count < ROWS) {
+        scrolled = (u8)(scrolled + count);
+    } else {
+        settle();
+        con_scroll(top, bot, n > 0 ? count : -count);
+    }
+    if (n > 0) {
+        memmove(dirty_from + top, dirty_from + top + count, (u32)(height - count));
+        memmove(dirty_to + top, dirty_to + top + count, (u32)(height - count));
+    } else {
+        memmove(dirty_from + top + count, dirty_from + top, (u32)(height - count));
+        memmove(dirty_to + top + count, dirty_to + top, (u32)(height - count));
+    }
     for (r = 0; r < count; r++) {
         int row = n > 0 ? bot - r : top + r;
 
-        memset(vt.p->ch[row], ' ', COLS);
-        memset(vt.p->at[row], attr_blank(), COLS);
+        memset(vt.p->ch[vt.p->row[row]], ' ', COLS);
+        memset(vt.p->at[vt.p->row[row]], attr_blank(), COLS);
+        dirty_from[row] = dirty_to[row] = 0;
         if (attr_blank())
-            con_fill(0, row, COLS, ' ', attr_blank());
+            mark(row, 0, COLS);
     }
 }
 
@@ -186,13 +250,13 @@ static void show(u8 c)
         line_feed();
     }
     if (vt.insert && vt.cx < COLS - 1) {
-        memmove(vt.p->ch[vt.cy] + vt.cx + 1, vt.p->ch[vt.cy] + vt.cx, (u32)(COLS - 1 - vt.cx));
-        memmove(vt.p->at[vt.cy] + vt.cx + 1, vt.p->at[vt.cy] + vt.cx, (u32)(COLS - 1 - vt.cx));
+        memmove(vt.p->ch[vt.p->row[vt.cy]] + vt.cx + 1, vt.p->ch[vt.p->row[vt.cy]] + vt.cx, (u32)(COLS - 1 - vt.cx));
+        memmove(vt.p->at[vt.p->row[vt.cy]] + vt.cx + 1, vt.p->at[vt.p->row[vt.cy]] + vt.cx, (u32)(COLS - 1 - vt.cx));
         redraw(vt.cy, vt.cx + 1, COLS);
     }
-    vt.p->ch[vt.cy][vt.cx] = c;
-    vt.p->at[vt.cy][vt.cx] = a;
-    con_draw(vt.cx, vt.cy, &c, 1, a);
+    vt.p->ch[vt.p->row[vt.cy]][vt.cx] = c;
+    vt.p->at[vt.p->row[vt.cy]][vt.cx] = a;
+    mark(vt.cy, vt.cx, vt.cx + 1);
     vt.last = c;
     if (vt_log)
         serial_putc((char)c);
@@ -437,7 +501,7 @@ static void looks(void)
 
 static void shift_cells(int n, int insert)
 {
-    u8 *c = vt.p->ch[vt.cy], *a = vt.p->at[vt.cy];
+    u8 *c = vt.p->ch[vt.p->row[vt.cy]], *a = vt.p->at[vt.p->row[vt.cy]];
     int rest = COLS - vt.cx;
 
     if (n > rest)
@@ -583,6 +647,7 @@ void vt_reset_modes(void)
 void vt_reset(void)
 {
     u8 keep = vt.cursor_on;
+    int i;
 
     if (keep)
         vt_cursor(0);
@@ -592,6 +657,11 @@ void vt_reset(void)
     memset(pages, 0, sizeof pages);
     memset(pages[0].ch, ' ', sizeof pages[0].ch);
     memset(pages[1].ch, ' ', sizeof pages[1].ch);
+    for (i = 0; i < ROWS; i++)
+        pages[0].row[i] = pages[1].row[i] = (u8)i;
+    memset(dirty_from, 0, sizeof dirty_from);
+    memset(dirty_to, 0, sizeof dirty_to);
+    scrolled = 0;
     con_clear();
 }
 
@@ -603,6 +673,7 @@ void vt_cursor(int on)
     if (on && !vt.show_cursor)
         on = 0;
     if (vt.cursor_on != (u8)on) {
+        flush();                /* the block goes on what is really there */
         con_invert(vt.cx, vt.cy);
         vt.cursor_on = (u8)on;
     }
@@ -633,6 +704,7 @@ void vt_end(void)
     vt_cursor(0);
     if (vt.alt)
         second_screen(0, 0);
+    flush();
     con_goto(0, vt.cy);
     if (vt.cx > 0 || vt.wrap)
         con_putc('\n');
@@ -656,6 +728,27 @@ void vt_write(const u8 *p, u32 n)
         }
         if (vt.state == STRING_ESC) {
             vt.state = b == '\\' ? GROUND : b == 0x1B ? STRING_ESC : STRING;
+            continue;
+        }
+        /* Plain letters, one after another on a row, are most of what comes:
+         * they go straight into the row, with none of the care below. */
+        if (b >= 0x20 && b < 0x7F && vt.state == GROUND && !vt.more && !vt.wrap && !vt.insert &&
+            !vt.set[vt.shift] && !vt_log && vt.cx < COLS - 1) {
+            u8 *ch = vt.p->ch[vt.p->row[vt.cy]], *at = vt.p->at[vt.p->row[vt.cy]], a = attr_now();
+            int x = vt.cx, from = x;
+
+            for (;;) {
+                ch[x] = b;
+                at[x] = a;
+                x++;
+                if (!n || x >= COLS - 1 || *p < 0x20 || *p >= 0x7F)
+                    break;
+                b = *p++;
+                n--;
+            }
+            vt.cx = x;
+            vt.last = b;
+            mark(vt.cy, from, x);
             continue;
         }
         /* Control characters act at once, even in the middle of an order. */
@@ -765,4 +858,5 @@ void vt_write(const u8 *p, u32 n)
             show('?');
         }
     }
+    flush();
 }

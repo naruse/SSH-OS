@@ -10,7 +10,7 @@
 
 #define CELL_W  6
 #define CELL_H  10
-#define ORIGIN_X 1      /* 85 * 6 = 510 of 512 pixels: centre it */
+#define ORIGIN_X 0      /* 85 * 6 = 510 of 512 pixels; at 0, four cells are three whole bytes */
 #define ORIGIN_Y (BAR_H + 1)    /* below the bar: 32 * 10 = 320 of the 322 rows left */
 
 extern const unsigned char font6x10[224][10];   /* codes 32-255 */
@@ -162,6 +162,84 @@ void con_fill(int col, int row, int n, u8 ch, u8 attr)
     }
     for (; n > 0 && col < CON_COLS; n--, col++)
         draw_cell_attr(col, row, ch, attr);
+}
+
+/* One row of a cell's picture, as its top six bits. */
+static u8 cell_bits(const unsigned char *glyph, u8 attr, int i)
+{
+    u8 g = glyph[i];
+
+    if (attr & CON_BOLD)
+        g |= (u8)(g >> 1);
+    if ((attr & CON_UNDERLINE) && i == CELL_H - 1)
+        g = 0xFC;
+    if (attr & CON_INVERSE)
+        g = (u8)~g;
+    return g & 0xFC;
+}
+
+/* Draw cells from..to-1 of a row, given the whole row: its characters and
+ * how each looks. This is the terminal's way to the screen, and the quick
+ * one: four cells are 24 pixels, three whole bytes, so they are put
+ * together and stored without reading the screen or shifting into it. The
+ * span is widened to whole fours for that, which is why the whole row must
+ * be given. Some eight times quicker than a cell at a time. */
+void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at)
+{
+    const unsigned char *g0, *g1, *g2, *g3;
+    u8 a, b, c, d;
+    u8 *p;
+    int col, i;
+
+    gfx_pointer_park();
+    if (row < 0 || row >= CON_ROWS)
+        return;
+    if (from < 0)
+        from = 0;
+    if (to > CON_COLS)
+        to = CON_COLS;
+    for (col = from & ~3; col < to; col += 4) {
+        if (col + 4 > CON_COLS) {           /* the odd cell at the end of the row */
+            for (; col < CON_COLS; col++)
+                draw_cell_attr(col, row, ch[col], at[col]);
+            break;
+        }
+        p = fb + ((unsigned)row * CELL_H + ORIGIN_Y) * SCREEN_ROWBYTES + (unsigned)(col >> 2) * 3;
+        if (!(at[col] | at[col + 1] | at[col + 2] | at[col + 3])) {
+            if (ch[col] == ' ' && ch[col + 1] == ' ' && ch[col + 2] == ' ' && ch[col + 3] == ' ') {
+                for (i = 0; i < CELL_H; i++, p += SCREEN_ROWBYTES)
+                    p[0] = p[1] = p[2] = 0;
+                continue;
+            }
+            g0 = font6x10[(ch[col] < 32 ? 127 : ch[col]) - 32];
+            g1 = font6x10[(ch[col + 1] < 32 ? 127 : ch[col + 1]) - 32];
+            g2 = font6x10[(ch[col + 2] < 32 ? 127 : ch[col + 2]) - 32];
+            g3 = font6x10[(ch[col + 3] < 32 ? 127 : ch[col + 3]) - 32];
+            for (i = 0; i < CELL_H; i++, p += SCREEN_ROWBYTES) {
+                a = *g0++ & 0xFC;
+                b = *g1++ & 0xFC;
+                c = *g2++ & 0xFC;
+                d = *g3++ & 0xFC;
+                p[0] = (u8)(a | (b >> 6));
+                p[1] = (u8)((b << 2) | (c >> 4));
+                p[2] = (u8)((c << 4) | (d >> 2));
+            }
+            continue;
+        }
+        g0 = font6x10[(ch[col] < 32 ? 127 : ch[col]) - 32];
+        g1 = font6x10[(ch[col + 1] < 32 ? 127 : ch[col + 1]) - 32];
+        g2 = font6x10[(ch[col + 2] < 32 ? 127 : ch[col + 2]) - 32];
+        g3 = font6x10[(ch[col + 3] < 32 ? 127 : ch[col + 3]) - 32];
+        for (i = 0; i < CELL_H; i++, p += SCREEN_ROWBYTES) {
+            a = cell_bits(g0, at[col], i);
+            b = cell_bits(g1, at[col + 1], i);
+            c = cell_bits(g2, at[col + 2], i);
+            d = cell_bits(g3, at[col + 3], i);
+            p[0] = (u8)(a | (b >> 6));
+            p[1] = (u8)((b << 2) | (c >> 4));
+            p[2] = (u8)((c << 4) | (d >> 2));
+        }
+    }
 }
 
 void con_scroll(int top, int bottom, int lines)
