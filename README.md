@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/naruse/SSH-OS/actions/workflows/tests.yml/badge.svg)](https://github.com/naruse/SSH-OS/actions/workflows/tests.yml)
 
-An operating system for the Macintosh SE, written from scratch, whose main job
+A single purpose operating system for the Macintosh SE, written from scratch, whose main job
 is to be an SSH terminal. It starts from a BlueSCSI in a few seconds, joins
 your WiFi, and logs in to other computers by itself: a real SSH client on an
 8 MHz 68000, with nothing in between. There is no Mac OS underneath. Apple's
