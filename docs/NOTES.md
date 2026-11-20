@@ -52,13 +52,12 @@ keyboard and mouse would need their own driver.
 
 ## Not done
 
-- The BlueSCSI doing SSH's slow sums and its packets, which would take
-  connecting from a minute to a few seconds and lift the 7 KB a second of
-  a session: both sides are written and tested against each
-  other on this side of the cable ([firmware/](../firmware/README.md)), and
-  the firmware builds with it, but it has not run on a real BlueSCSI yet.
+- The BlueSCSI doing SSH's slow sums and its packets
+  ([firmware/](../firmware/README.md)) runs on a real SE with a Pico W,
+  and connecting is far quicker with it, but nothing has been timed there
+  yet, and it is built for the Pico W only, not the Pico 2 W.
 - SSH:
-  - Connecting takes about a minute (see above).
+  - Connecting takes about a minute without that firmware (see above).
   - Random numbers, which SSH's safety rests on, are gathered from the
     timing of keys, mouse and network packets (`kernel/rng.c`). That is
     weaker than a modern computer's source, most of all right after start-up.

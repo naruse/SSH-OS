@@ -33,10 +33,33 @@ Steps
   5. Click the SSH icon, then New connection, and type user@server (add
      :port if it is not 22). Connect.
 
+Faster SSH (optional, and worth it)
+
+  Connecting takes about a minute, because the 68000 does all of SSH's
+  arithmetic itself. The folder "firmware" holds a BlueSCSI firmware that
+  lets SSH OS hand that work to the BlueSCSI's processor; connecting then
+  takes a small part of that time. It is for a BlueSCSI v2 with a Pico W
+  (not the Pico 2 W); everything else in it is as BlueSCSI makes it.
+
+  1. Switch the SE off and unplug the BlueSCSI's ribbon cable and power
+     plug (or take the Pico out of its socket).
+  2. Hold the white BOOTSEL button on the Pico and plug its USB port into
+     a computer. A drive called RPI-RP2 appears.
+  3. Copy firmware/BlueSCSI_Pico_DaynaPORT_SSHOS.uf2 onto that drive. It
+     disappears by itself when done.
+
+  SSH OS then says "SSH acceleration on (BlueSCSI)" while it connects.
+  Later versions can go on from the SD card: copy the .bin file to the top
+  of the card and switch on (we have only used USB so far). To go back,
+  put BlueSCSI's own release on the same way. Source and licence: see
+  firmware/README.txt.
+
 Good to know
 
-  - Connecting takes about a minute: the 68000 does all of SSH's
-    arithmetic itself. The bar on the screen shows how far it is, and
+  - In a session, Command with the up or down arrow is Page Up or Page
+    Down, and with the left or right arrow Home or End. Command-Q ends
+    the session.
+  - While connecting, the bar on the screen shows how far it is, and
     Cancel (or Esc) stops it.
   - The first time, SSH OS shows the server's fingerprint and asks whether
     to trust it; after your password it asks whether to log in without one

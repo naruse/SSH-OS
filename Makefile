@@ -495,10 +495,11 @@ test-disk:
 # What to hand to someone who wants to run SSH OS: dist/SSH-OS-VERSION.zip
 # with the three files for the BlueSCSI's card and the guide
 # (docs/INSTALL.txt). Built from config.release.txt, never from your own
-# settings, so nothing of yours is in it.
+# settings, so nothing of yours is in it. If build-firmware/ holds the
+# BlueSCSI firmware built with our addition (firmware/README.md), it goes in.
 release:
 	$(MAKE) B=build-release CONFIG=config.release.txt build-release/sshos-boot.hda
-	python3 tools/mkrelease.py build-release/sshos-boot.hda dist
+	python3 tools/mkrelease.py build-release/sshos-boot.hda dist $(wildcard build-firmware)
 
 tools:
 	mkdir -p "$(SNOW_SRC)/testrunner/src/bin/juanrun"

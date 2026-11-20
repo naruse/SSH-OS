@@ -32,6 +32,7 @@ is one zip, `SSH-OS-VERSION.zip`, made by `make release`. In it:
 | `HD0_512 SSH OS boot.hda` | SSH OS itself; the SE starts from this |
 | `HD1_512 SSH OS.hda` | An empty SSH OS disk, where it keeps your WiFi, the servers you connect to and its own key |
 | `NE4.hda` | An empty file: it switches on the BlueSCSI's network adapter |
+| `firmware/` | A BlueSCSI firmware that makes SSH much faster, [see below](#faster-ssh-the-bluescsi-firmware) |
 | `INSTALL.txt` | These steps, and what to check if it does not start |
 
 1. Format an SD card as FAT32 or exFAT. Use a card of its own; your Mac OS
@@ -41,11 +42,63 @@ is one zip, `SSH-OS-VERSION.zip`, made by `make release`. In it:
 4. Click the fan at the right of the bar, click your WiFi network and type
    its password.
 5. Click SSH, then New connection, and type `user@server`.
+6. Optional, and worth it: put the firmware from the release on the
+   BlueSCSI, [as below](#faster-ssh-the-bluescsi-firmware). Connecting
+   takes about a minute without it.
 
 The release is built from `config.release.txt`, which holds nothing but
 "ask the network for an address": no key, no server, no WiFi of anyone's.
 Nothing in it is Apple's. To build it yourself instead, see
 [Building and testing](docs/BUILDING.md).
+
+## Faster SSH: the BlueSCSI firmware
+
+SSH's arithmetic is heavy for an 8 MHz 68000: with the BlueSCSI's own
+firmware the SE does it all itself, and connecting takes about a minute.
+The release also holds a BlueSCSI firmware with one addition: SSH OS can
+hand that arithmetic, and the encryption of a session's packets, to the
+BlueSCSI's much faster processor. Connecting then takes a small part of
+that time. SSH OS finds out by itself which firmware is there, and says
+"SSH acceleration on (BlueSCSI)" while it connects.
+
+![Connecting, with the BlueSCSI helping](docs/accel.png)
+
+It is for a BlueSCSI v2 with a **Pico W** (not the Pico 2 W). Everything
+else in the firmware is as BlueSCSI makes it.
+
+| File in the release | What it is for |
+|---|---|
+| `firmware/BlueSCSI_Pico_DaynaPORT_SSHOS.uf2` | Putting it on over USB |
+| `firmware/BlueSCSI_Pico_DaynaPORT_SSHOS.bin` | Updating from the SD card afterwards |
+
+Over USB, which works with any firmware that is on there now:
+
+1. Switch the SE off and unplug the BlueSCSI's ribbon cable and power
+   plug (or take the Pico out of its socket).
+2. Hold the white BOOTSEL button on the Pico and plug its USB port into a
+   computer. A drive called `RPI-RP2` appears.
+3. Copy the `.uf2` file onto that drive. It disappears by itself when done.
+
+Later versions can go on from the card: copy the `.bin` file to the top of
+the SD card and switch on; the BlueSCSI takes it in and removes the file.
+(That is how BlueSCSI's firmware describes it; we have only used USB so
+far.) To go back, put BlueSCSI's own release on the same way.
+
+The firmware is BlueSCSI's, under its licence (GPL 3), with our addition:
+[the source](https://github.com/naruse/BlueSCSI-v2/tree/sshos-crypto), and what the addition does in
+[firmware/](firmware/README.md).
+
+## Keys
+
+| Key | What it does |
+|---|---|
+| Command-Q, or Control-] | Ends the SSH session and returns to the home screen |
+| Esc | Stops a connection while it is being made |
+| Command-Up, Command-Down | Page Up, Page Down: scroll back in programs that keep a history |
+| Command-Left, Command-Right | Home, End |
+
+The SE's own keyboard has no Page Up, Page Down, Home or End, which is why
+Command with an arrow stands in for them. More in [Using it](docs/USING.md).
 
 ## What it does
 
@@ -57,7 +110,7 @@ Nothing in it is Apple's. To build it yourself instead, see
 | Disk | SCSI driver: scan the bus, read and write blocks |
 | File system | The SSH OS disk: a FAT16 volume for settings, trusted SSH servers and past connections |
 | Network | The BlueSCSI's WiFi adapter over SCSI; ARP, IP, ping, UDP, DHCP, DNS, TCP |
-| SSH | Curve25519, Ed25519, ChaCha20-Poly1305, all in plain C on the 68000; log-in by key or password |
+| SSH | Curve25519, Ed25519, ChaCha20-Poly1305, all in plain C on the 68000, or handed to the BlueSCSI where its firmware can; log-in by key or password |
 | Terminal | An xterm-style terminal, 85 x 32 characters, so full-screen programs work: editors, `top`, `tmux`, text interfaces |
 | Home screen | A bar (memory, processor load, volume, network, clock), the SSH OS menu, and icons for SSH, the hardware test and Settings; mouse or keyboard |
 | Hardware test | The SE's logic board with a number on each part, and a field for each to see and try it: keyboard and mouse, SCSI, network, sound, screen, memory |

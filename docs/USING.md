@@ -14,8 +14,11 @@ The start-up screen shows for a few seconds, then the home screen.
 2. **SSH.** Click the SSH icon, type `user@server`, press Return. The first
    time, the SE shows the fingerprint of the server's key and asks whether to
    trust it; then it asks for the password. Connecting takes the SE about a
-   minute, see [how long connecting takes](NOTES.md#how-long-connecting-takes).
+   minute by itself, see [how long connecting takes](NOTES.md#how-long-connecting-takes),
+   and far less with [the BlueSCSI firmware](../README.md#faster-ssh-the-bluescsi-firmware).
 3. Command-Q or Control-] ends a session and returns to the home screen.
+   Command with the up or down arrow is Page Up or Page Down, and with the
+   left or right arrow Home or End: the SE's own keyboard has none of them.
 
 ## The home screen
 
