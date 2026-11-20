@@ -9,45 +9,7 @@ static int is_even(const void *p)
     return ((u32)p & 1) == 0;
 }
 
-void *memcpy(void *dst, const void *src, size_t n)
-{
-    u8 *d = dst;
-    const u8 *s = src;
-
-    /* Two odd addresses become even after one byte. Only when one is odd
-     * and the other even is there no way round the byte loop. */
-    if (n && !is_even(d) && !is_even(s)) {
-        *d++ = *s++;
-        n--;
-    }
-    if (is_even(d) && is_even(s)) {
-        u32 *dl = (u32 *)d;
-        const u32 *sl = (const u32 *)s;
-        for (; n >= 4; n -= 4)
-            *dl++ = *sl++;
-        d = (u8 *)dl;
-        s = (const u8 *)sl;
-    }
-    while (n--)
-        *d++ = *s++;
-    return dst;
-}
-
-void *memmove(void *dst, const void *src, size_t n)
-{
-    u8 *d = dst;
-    const u8 *s = src;
-
-    if (d <= s || d >= s + n)
-        return memcpy(dst, src, n);
-
-    /* Overlapping with dst above src: copy backwards. */
-    d += n;
-    s += n;
-    while (n--)
-        *--d = *--s;
-    return dst;
-}
+/* memcpy and memmove are in copy.S. */
 
 void *memset(void *dst, int c, size_t n)
 {

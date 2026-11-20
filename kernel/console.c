@@ -83,9 +83,12 @@ static void newline(void)
     }
 }
 
+static void place_letters(void);
+
 void con_init(u8 *screen)
 {
     fb = screen;
+    place_letters();
     inverse = 0;
     con_clear();
 }
@@ -178,6 +181,29 @@ static u8 cell_bits(const unsigned char *glyph, u8 attr, int i)
     return g & 0xFC;
 }
 
+/* Every letter's picture as it lands in each of the four places of a group
+ * of four cells (three bytes): the first cell's six bits in the first
+ * byte, the second cell's split over the first and second, and so on.
+ * placed[0] first cell; [1], [2] second; [3], [4] third; [5] fourth. */
+static u8 placed[6][224][CELL_H];
+
+static void place_letters(void)
+{
+    int g, i;
+
+    for (g = 0; g < 224; g++)
+        for (i = 0; i < CELL_H; i++) {
+            u8 b = font6x10[g][i] & 0xFC;
+
+            placed[0][g][i] = b;
+            placed[1][g][i] = (u8)(b >> 6);
+            placed[2][g][i] = (u8)(b << 2);
+            placed[3][g][i] = (u8)(b >> 4);
+            placed[4][g][i] = (u8)(b << 4);
+            placed[5][g][i] = (u8)(b >> 2);
+        }
+}
+
 /* Draw cells from..to-1 of a row, given the whole row: its characters and
  * how each looks. This is the terminal's way to the screen, and the quick
  * one: four cells are 24 pixels, three whole bytes, so they are put
@@ -186,7 +212,7 @@ static u8 cell_bits(const unsigned char *glyph, u8 attr, int i)
  * be given. Some eight times quicker than a cell at a time. */
 void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at)
 {
-    const unsigned char *g0, *g1, *g2, *g3;
+    const unsigned char *g0, *g1, *g2, *g3, *h1, *h2;
     u8 a, b, c, d;
     u8 *p;
     int col, i;
@@ -211,18 +237,18 @@ void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at)
                     p[0] = p[1] = p[2] = 0;
                 continue;
             }
-            g0 = font6x10[(ch[col] < 32 ? 127 : ch[col]) - 32];
-            g1 = font6x10[(ch[col + 1] < 32 ? 127 : ch[col + 1]) - 32];
-            g2 = font6x10[(ch[col + 2] < 32 ? 127 : ch[col + 2]) - 32];
-            g3 = font6x10[(ch[col + 3] < 32 ? 127 : ch[col + 3]) - 32];
+            /* Plain letters, nearly everything: each one's share of the
+             * three bytes is ready in a table, so there is no shifting. */
+            g0 = placed[0][(ch[col] < 32 ? 127 : ch[col]) - 32];
+            g1 = placed[1][(ch[col + 1] < 32 ? 127 : ch[col + 1]) - 32];
+            g2 = placed[3][(ch[col + 2] < 32 ? 127 : ch[col + 2]) - 32];
+            g3 = placed[5][(ch[col + 3] < 32 ? 127 : ch[col + 3]) - 32];
+            h1 = g1 + sizeof placed[0];
+            h2 = g2 + sizeof placed[0];
             for (i = 0; i < CELL_H; i++, p += SCREEN_ROWBYTES) {
-                a = *g0++ & 0xFC;
-                b = *g1++ & 0xFC;
-                c = *g2++ & 0xFC;
-                d = *g3++ & 0xFC;
-                p[0] = (u8)(a | (b >> 6));
-                p[1] = (u8)((b << 2) | (c >> 4));
-                p[2] = (u8)((c << 4) | (d >> 2));
+                p[0] = (u8)(*g0++ | *g1++);
+                p[1] = (u8)(*h1++ | *g2++);
+                p[2] = (u8)(*h2++ | *g3++);
             }
             continue;
         }

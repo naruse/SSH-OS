@@ -343,6 +343,7 @@ int ask_password(const char *user, const char *host, char *line, int max)
 }
 
 /* No BlueSCSI here to do the sums. */
+int copro_present(void) { return 0; }
 int copro_x25519(u8 *out32, const u8 *scalar32, const u8 *point32)
 { (void)out32; (void)scalar32; (void)point32; return -1; }
 int copro_ed25519_public(u8 *pub32, const u8 *seed32)

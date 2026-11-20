@@ -31,7 +31,8 @@
 #define TALK_R0(addr) (u8)(((addr) << 4) | 0x0C)
 #define IS_TALK(cmd)  (((cmd) & 0x0C) == 0x0C)
 
-volatile u32 adb_packets, adb_timeouts;
+volatile u32 adb_packets, adb_timeouts, adb_restarts;
+static u8 quiet;                /* ticks since the transceiver last had anything to say */
 
 static enum { IDLE, SENDING, READING } state;
 static u8 reply[9];             /* command byte + up to 8 data bytes */
@@ -104,6 +105,7 @@ void adb_interrupt(void)
     u8 status = VIA(VIA_ORB) & (ST_MASK | PB_ADB_INT);
     u8 x;
 
+    quiet = 0;
     switch (state) {
     case IDLE:
         /* Unrequested report: the transceiver polled and the device had data. */
@@ -185,6 +187,29 @@ void adb_interrupt(void)
             set_state(ST_IDLE);
         }
     }
+}
+
+/* Called on every tick that brings no interrupt from the transceiver.
+ * Everything above is moved along by those interrupts, one a byte: if one
+ * is lost or comes too late (the machine was busy with interrupts off, on
+ * the SCSI bus for one) the exchange stops half way, no further interrupt
+ * comes, and keyboard and mouse are dead for good. So an exchange that
+ * has stood still for a fifth of a second is given up and the keyboard
+ * asked again. */
+#define STUCK_TICKS 12
+
+void adb_watch(void)
+{
+    if (quiet < 255)
+        quiet++;
+    if (state == IDLE || quiet < STUCK_TICKS)
+        return;
+    quiet = 0;
+    adb_restarts++;
+    have_pending = 0;
+    (void)shift_in();
+    set_state(ST_IDLE);
+    start_command(TALK_R0(ADB_KEYBOARD));
 }
 
 /* Called from via_init with all VIA interrupts disabled. */

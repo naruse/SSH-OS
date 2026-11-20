@@ -98,6 +98,12 @@ static void reply_num(u32 v)
  * screen once, not line by line. */
 static u8 dirty_from[ROWS], dirty_to[ROWS];     /* to <= from: nothing to draw */
 static u8 scrolled;             /* the whole screen is to move up by this many rows first */
+static u8 wiped;                /* more than a screenful has gone by: nothing on the screen is
+                                 * of use any more, and it is drawn afresh */
+u8 vt_step;                     /* the screen moves up no more than this many rows at once,
+                                 * each step drawn as it happens; 0 for no limit */
+u8 vt_hold;                     /* vt_write leaves the drawing to vt_show: text that comes in
+                                 * faster than it can be drawn then scrolls by unseen */
 
 static void mark(int row, int from, int to)
 {
@@ -118,24 +124,177 @@ static void mark(int row, int from, int to)
         dirty_to[row] = (u8)to;
 }
 
+/* What is on the glass, kept like a page: the drawing compares against it
+ * and leaves alone what is there already. */
+static u8 seen_ch[ROWS][COLS], seen_at[ROWS][COLS], seen_row[ROWS];
+static u8 waiting, frame_done;  /* see flush_if_whole */
+static u32 waiting_since;
+
+static void seen_clear(void)
+{
+    int r;
+
+    memset(seen_ch, ' ', sizeof seen_ch);
+    memset(seen_at, 0, sizeof seen_at);
+    for (r = 0; r < ROWS; r++)
+        seen_row[r] = (u8)r;
+}
+
+/* Move rows of the glass, and the record of them with it. */
+static void glass_scroll(int top, int bot, int n)
+{
+    int height = bot - top + 1, count = n < 0 ? -n : n, r;
+    u8 keep[ROWS];
+
+    if (count > height)
+        count = height;
+    con_scroll(top, bot, n);
+    if (n > 0) {
+        memcpy(keep, seen_row + top, (u32)count);
+        memmove(seen_row + top, seen_row + top + count, (u32)(height - count));
+        memcpy(seen_row + bot + 1 - count, keep, (u32)count);
+    } else {
+        memcpy(keep, seen_row + bot + 1 - count, (u32)count);
+        memmove(seen_row + top + count, seen_row + top, (u32)(height - count));
+        memcpy(seen_row + top, keep, (u32)count);
+    }
+    for (r = 0; r < count; r++) {
+        int row = n > 0 ? bot - r : top + r;
+
+        memset(seen_ch[seen_row[row]], ' ', COLS);
+        memset(seen_at[seen_row[row]], 0, COLS);
+    }
+}
+
 /* Move the screen as far as the text has moved; the notes then fit it. */
 static void settle(void)
 {
+    int r, to;
+
+    if (wiped) {
+        wiped = 0;
+        glass_scroll(0, ROWS - 1, ROWS);        /* clears it */
+        for (r = 0; r < ROWS; r++) {
+            const u8 *ch = vt.p->ch[vt.p->row[r]], *at = vt.p->at[vt.p->row[r]];
+
+            for (to = COLS; to > 0 && ch[to - 1] == ' ' && !at[to - 1]; to--)
+                ;
+            dirty_from[r] = 0;
+            dirty_to[r] = (u8)to;
+        }
+    }
     if (scrolled)
-        con_scroll(0, ROWS - 1, scrolled);
+        glass_scroll(0, ROWS - 1, scrolled);
     scrolled = 0;
+}
+
+/* Is row r as it should be the same as row q of what is on the glass? */
+static int row_is(int r, int q)
+{
+    const u8 *a = vt.p->ch[vt.p->row[r]], *b = seen_ch[seen_row[q]];
+    int i;
+
+    for (i = 0; i < COLS; i++)
+        if (a[i] != b[i])
+            return 0;
+    a = vt.p->at[vt.p->row[r]];
+    b = seen_at[seen_row[q]];
+    for (i = 0; i < COLS; i++)
+        if (a[i] != b[i])
+            return 0;
+    return 1;
+}
+
+/* A row that was written, and now reads as the row k further down did. */
+static int moved(int r, int k)
+{
+    return dirty_to[r] > dirty_from[r] && r + k >= 0 && r + k < ROWS && row_is(r, r + k) && !row_is(r, r);
+}
+
+/* Programs that draw the whole screen themselves (Claude Code is one) do
+ * not scroll: for one new line they write every row again, each with the
+ * text of the row below. Drawn as sent, that is the whole screen painted
+ * top to bottom. So before drawing, see whether what was written is what
+ * is on the glass already, a few rows up or down: if so the glass is
+ * moved, which is quick, and only what then still differs is drawn. */
+static void find_scroll(void)
+{
+    int r, k, n, best = 0, best_n = 0, first, last, written = 0;
+
+    for (r = 0; r < ROWS; r++)
+        written += dirty_to[r] > dirty_from[r];
+    if (written < 4)
+        return;
+    for (k = -3; k <= 3; k++) {
+        if (!k)
+            continue;
+        for (n = 0, r = 0; r < ROWS; r++)
+            n += moved(r, k);
+        if (n > best_n)
+            best_n = n, best = k;
+    }
+    if (best_n < 4)
+        return;
+    for (first = 0; !moved(first, best); first++)
+        ;
+    for (last = ROWS - 1; !moved(last, best); last--)
+        ;
+    if (best > 0)
+        last += best;
+    else
+        first += best;
+    glass_scroll(first, last, best);
+    for (r = first; r <= last; r++) {           /* anything in there may differ now */
+        dirty_from[r] = 0;
+        dirty_to[r] = COLS;
+    }
 }
 
 static void flush(void)
 {
-    int r;
+    int r, from, to;
 
+    waiting = 0;
+    frame_done = 0;
     settle();
+    find_scroll();
     for (r = 0; r < ROWS; r++)
         if (dirty_to[r] > dirty_from[r]) {
-            con_draw_cells(r, dirty_from[r], dirty_to[r], vt.p->ch[vt.p->row[r]], vt.p->at[vt.p->row[r]]);
+            const u8 *ch = vt.p->ch[vt.p->row[r]], *at = vt.p->at[vt.p->row[r]];
+            u8 *sc = seen_ch[seen_row[r]], *sa = seen_at[seen_row[r]];
+
+            /* only what is not on the glass already */
+            from = dirty_from[r];
+            to = dirty_to[r];
             dirty_from[r] = dirty_to[r] = 0;
+            while (from < to && ch[from] == sc[from] && at[from] == sa[from])
+                from++;
+            while (to > from && ch[to - 1] == sc[to - 1] && at[to - 1] == sa[to - 1])
+                to--;
+            if (from >= to)
+                continue;
+            con_draw_cells(r, from, to, ch, at);
+            memcpy(sc + from, ch + from, (u32)(to - from));
+            memcpy(sa + from, at + from, (u32)(to - from));
         }
+}
+
+/* Draw now, unless a program is in the middle of painting the screen: it
+ * hides the cursor while it does, and shows it when it is done. Not for
+ * ever, though: some never show it again. */
+#define FRAME_WAIT 60           /* ticks */
+
+static void flush_if_whole(void)
+{
+    if (vt_hold && !vt.show_cursor && !frame_done) {
+        if (!waiting) {
+            waiting = 1;
+            waiting_since = ticks;
+        }
+        if (ticks - waiting_since < FRAME_WAIT)
+            return;
+    }
+    flush();
 }
 
 static void blank(int row, int from, int n)
@@ -170,13 +329,16 @@ static void redraw_all(void)
 /* Move rows top..bot up by n (down if n is negative); new rows are blank. */
 static void scroll(int top, int bot, int n)
 {
-    int height = bot - top + 1, r, count = n < 0 ? -n : n;
+    int height = bot - top + 1, r, count = n < 0 ? -n : n, whole;
     u8 keep[ROWS];
 
     if (height <= 0 || n == 0)
         return;
     if (count > height)
         count = height;
+    whole = n > 0 && top == 0 && bot == ROWS - 1;
+    if (!whole)
+        settle();               /* while the rows are still where the notes say */
     /* The rows themselves stay where they are in memory: only the list of
      * which is where is turned round. The ones that drop off one end come
      * in at the other, to be blanked below. */
@@ -193,11 +355,15 @@ static void scroll(int top, int bot, int n)
      * end of what is being read; anything else is done now. The notes of
      * what is still to draw move with their rows either way, and the rows
      * that come in are clear on the screen already. */
-    if (n > 0 && top == 0 && bot == ROWS - 1 && scrolled + count < ROWS) {
-        scrolled = (u8)(scrolled + count);
+    if (whole) {
+        if (wiped)
+            ;
+        else if (scrolled + count < ROWS)
+            scrolled = (u8)(scrolled + count);
+        else
+            wiped = 1, scrolled = 0;
     } else {
-        settle();
-        con_scroll(top, bot, n > 0 ? count : -count);
+        glass_scroll(top, bot, n > 0 ? count : -count);
     }
     if (n > 0) {
         memmove(dirty_from + top, dirty_from + top + count, (u32)(height - count));
@@ -215,6 +381,8 @@ static void scroll(int top, int bot, int n)
         if (attr_blank())
             mark(row, 0, COLS);
     }
+    if (whole && vt_step && scrolled >= vt_step)
+        flush_if_whole();
 }
 
 static void line_feed(void)
@@ -405,7 +573,7 @@ static void set_mode(int on)
             case 1: vt.app_keys = (u8)on; break;
             case 6: vt.origin = (u8)on; go(0, on ? vt.top : 0); break;
             case 7: vt.autowrap = (u8)on; vt.wrap = 0; break;
-            case 25: vt.show_cursor = (u8)on; break;
+            case 25: vt.show_cursor = (u8)on; frame_done = (u8)on; break;
             case 47: case 1047: second_screen(on, 1); break;
             case 1048: if (on) save_cursor(); else restore_cursor(); break;
             case 1049:
@@ -663,6 +831,8 @@ void vt_reset(void)
     memset(dirty_to, 0, sizeof dirty_to);
     scrolled = 0;
     con_clear();
+    seen_clear();
+    scrolled = wiped = waiting = frame_done = 0;
 }
 
 /* Show or hide the cursor block. Programs can ask for it to stay hidden. */
@@ -858,5 +1028,17 @@ void vt_write(const u8 *p, u32 n)
             show('?');
         }
     }
-    flush();
+    if (!vt_hold || frame_done)
+        flush();
+    else if (!waiting) {
+        waiting = 1;
+        waiting_since = ticks;
+    }
+}
+
+/* Draw what vt_write has left undrawn (see vt_hold). */
+void vt_show(void)
+{
+    if (vt.p)
+        flush_if_whole();
 }

@@ -23,13 +23,15 @@ INVERSE, BOLD, UNDERLINE = 1, 2, 4
 
 
 class Result:
-    def __init__(self, data):
-        out = subprocess.run([HOST], input=data, stdout=subprocess.PIPE, check=True).stdout
+    def __init__(self, data, frames=False):
+        env = dict(os.environ, VT_FRAMES="1") if frames else None
+        out = subprocess.run([HOST], input=data, stdout=subprocess.PIPE, check=True, env=env).stdout
         lines = out.decode().split("\n")
         self.codes = [[int(l[i:i + 2], 16) for i in range(0, COLS * 3, 3)] for l in lines[:ROWS]]
         self.attrs = [[int(l[i + 2], 16) for i in range(0, COLS * 3, 3)] for l in lines[:ROWS]]
         self.cursor = tuple(int(v) for v in lines[ROWS].split()[1:])
         self.reply = bytes.fromhex(lines[ROWS + 1][6:])
+        self.drawn, self.scrolls = (int(v) for v in lines[ROWS + 2].split()[1::2])
 
     def row(self, r):
         return bytes(self.codes[r]).decode("latin-1").rstrip()
@@ -63,6 +65,35 @@ class Stated(unittest.TestCase):
         r = run("".join("line %d\r\n" % i for i in range(40)))
         self.assertEqual(r.row(0), "line 9")
         self.assertEqual(r.row(ROWS - 2), "line 39")
+
+    def test_a_screen_painted_one_row_up_is_scrolled(self):
+        # As Claude Code draws: no scrolling, every row written again with
+        # the text of the row below, a status line staying at the bottom.
+        text = ["line %d of the story, with words enough to fill it" % i for i in range(80)]
+
+        def frame(first):
+            out = "\x1b[?25l\x1b[H"
+            for r in range(ROWS - 2):
+                out += text[first + r] + "\x1b[K\r\x1b[1B"
+            return out + "\x1b[%d;1Hstatus %d\x1b[K\x1b[?25h" % (ROWS, first)
+
+        for step in (1, 2, 3):
+            frames = [frame(i) for i in range(0, 12 * step + 1, step)]
+            r = Result("".join(frames).encode(), frames=True)
+            for row in range(ROWS - 2):
+                self.assertEqual(r.row(row), text[12 * step + row])
+            self.assertEqual(r.row(ROWS - 1), "status %d" % (12 * step))
+            self.assertEqual(r.scrolls, 12)
+            first = Result(frames[0].encode(), frames=True).drawn
+            self.assertLess(r.drawn - first, 12 * step * 2 * COLS)   # not a screenful each time
+
+    def test_a_screen_painted_one_row_down_is_scrolled(self):
+        text = ["line %d" % i for i in range(60)]
+        frames = ["\x1b[?25l\x1b[H" + "".join(text[f + r] + "\x1b[K\r\n" for r in range(ROWS - 1)) + "\x1b[?25h"
+                  for f in range(10, -1, -1)]
+        r = Result("".join(frames).encode(), frames=True)
+        self.assertEqual([r.row(i) for i in range(3)], text[:3])
+        self.assertEqual(r.scrolls, 10)
 
     def test_region(self):
         r = run("top\x1b[2;4r\x1b[2;1Ha\r\nb\r\nc\r\nd\x1b[r")

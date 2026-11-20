@@ -37,6 +37,8 @@ void via_interrupt(void)
         ticks++;
         gfx_pointer_tick();
         snd_tick();
+        if (!(pending & VIA_INT_SR))
+            adb_watch();
     }
     if (pending & VIA_INT_SR)
         adb_interrupt();                        /* reading the shift register clears the flag */

@@ -133,6 +133,41 @@ static u32 feed_all(u32 total)
     return ticks - t0;
 }
 
+/* The copying in copy.S against a byte at a time, for every mix of odd and
+ * even ends, short and long, apart and overlapping either way. */
+static void copy_check(void)
+{
+    static u8 a[700], b[700];
+    static const u16 lens[] = { 0, 1, 2, 3, 4, 5, 7, 47, 48, 49, 95, 96, 97, 143, 144, 145, 300, 401 };
+    u32 i, k, from, to, bad = 0, n, done = 0;
+
+    for (k = 0; k < sizeof lens / sizeof lens[0]; k++)
+        for (from = 100; from < 104; from++)
+            for (to = 60; to < 150; to += (to >= 96 && to < 108) ? 1 : 9) {
+                n = lens[k];
+                for (i = 0; i < sizeof a; i++)
+                    a[i] = b[i] = (u8)(i * 7 + k);
+                if (to <= from)
+                    for (i = 0; i < n; i++)
+                        b[to + i] = b[from + i];
+                else
+                    for (i = n; i-- > 0;)
+                        b[to + i] = b[from + i];
+                memmove(a + to, a + from, n);
+                for (i = 0; i < sizeof a; i++)
+                    if (a[i] != b[i])
+                        bad++;
+                for (i = 0; i < sizeof a; i++)
+                    a[i] = (u8)(i * 5 + 1), b[i] = 0;
+                memcpy(b + to, a + from, n);
+                for (i = 0; i < sizeof a; i++)
+                    if (b[i] != (i >= to && i < to + n ? a[from + i - to] : 0))
+                        bad++;
+                done++;
+            }
+    kprintf("Copying: %lu cases, %lu bytes wrong.\n", done, bad);
+}
+
 void cmd_bench_term(void)
 {
     u32 t0, dt, i, n;
@@ -148,6 +183,38 @@ void cmd_bench_term(void)
     vt_end();
     con_clear();
     rate("Terminal, lines that scroll", 32 * 1024, dt);
+
+    /* the same with nothing drawn until the end: the reading alone */
+    vt_reset();
+    vt_hold = 1;
+    dt = feed_all(32 * 1024);
+    vt_hold = 0;
+    vt_show();
+    vt_end();
+    con_clear();
+    rate("Terminal, reading only", 32 * 1024, dt);
+
+    /* the same, drawn only now and then, as an SSH session does it */
+    vt_reset();
+    vt_hold = 1;
+    t0 = next_tick();
+    for (i = 0, n = t0, dt = 6; i < 32; i++) {
+        vt_write(feed, sizeof feed);
+        if (ticks - n >= dt) {
+            n = ticks;
+            vt_show();
+            dt = (ticks - n) * 3 / 2;
+            if (dt < 6)
+                dt = 6;
+            n = ticks;
+        }
+    }
+    vt_hold = 0;
+    vt_show();
+    dt = ticks - t0;
+    vt_end();
+    con_clear();
+    rate("Terminal, lines that pour in", 32 * 1024, dt);
 
     /* the same lines written over each other at the top */
     for (i = 0; i < sizeof feed; i++)
@@ -184,6 +251,11 @@ void cmd_bench_term(void)
         con_scroll(0, 31, 1);
     dt = ticks - t0;
     kprintf("Scrolling 31 lines: %lu ticks.\n", dt);
+    t0 = next_tick();
+    for (i = 0; i < 31; i++)
+        con_scroll(0, 31, -1);
+    kprintf("Scrolling 31 lines back: %lu ticks.\n", ticks - t0);
+    copy_check();
     con_clear();
     kputs("BENCH-DONE\n");
 }

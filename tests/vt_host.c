@@ -3,10 +3,13 @@
  * vt.c remembers), the cursor, and what the terminal answered.
  * Used by tests/test_vtc.py. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../kernel/kernel.h"
 
 static u8 glass[CON_ROWS][CON_COLS], looks[CON_ROWS][CON_COLS];
+static long cells_drawn, scrolls;
+volatile u32 ticks;
 /* charset_extra and charset_box come from the font file. */
 
 void con_clear(void)
@@ -31,6 +34,7 @@ void con_draw_cells(int row, int from, int to, const u8 *ch, const u8 *at)
             break;
         glass[row][from] = ch[from];
         looks[row][from] = at[from];
+        cells_drawn++;
     }
 }
 
@@ -45,6 +49,8 @@ void con_fill(int col, int row, int n, u8 ch, u8 attr)
 void con_scroll(int top, int bottom, int lines)
 {
     int height = bottom - top + 1, n = lines < 0 ? -lines : lines, i;
+
+    scrolls++;
 
     if (lines > 0) {
         memmove(glass[top], glass[top + n], (size_t)(height - n) * CON_COLS);
@@ -88,7 +94,24 @@ int main(void)
     int r, c, k;
 
     vt_reset();
-    vt_write(in, (u32)n);
+    if (getenv("VT_FRAMES")) {
+        /* as an SSH session does: drawn when a program shows the cursor
+         * again, each such stretch written on its own */
+        static const char end[] = "\033[?25h";
+        size_t at = 0, i;
+
+        vt_hold = 1;
+        for (i = 0; i + 6 <= n; i++)
+            if (!memcmp(in + i, end, 6)) {
+                vt_write(in + at, (u32)(i + 6 - at));
+                at = i + 6;
+            }
+        vt_write(in + at, (u32)(n - at));
+        vt_hold = 0;
+        vt_show();
+    } else {
+        vt_write(in, (u32)n);
+    }
     vt_cursor(1);
     for (r = 0; r < CON_ROWS; r++) {
         for (c = 0; c < CON_COLS; c++)
@@ -101,5 +124,6 @@ int main(void)
     for (c = 0; c < k; c++)
         printf("%02x", back[c]);
     putchar('\n');
+    printf("drawn %ld scrolls %ld\n", cells_drawn, scrolls);
     return 0;
 }

@@ -300,6 +300,11 @@ int connect_run(char *target)
     gfx_fill(BAR_X + 1, BAR_Y + 1, BAR_W - 2, 8, GFX_WHITE);
     gfx_end();
     draw_stop();
+    if (copro_present()) {      /* the BlueSCSI does the sums: say so */
+        gfx_begin();
+        centered(STOP_Y - 20, "SSH acceleration on (BlueSCSI)", 0);
+        gfx_end();
+    }
     net_abort_check = stop_wanted;
 
     serial_puts("DESK: connecting\n");

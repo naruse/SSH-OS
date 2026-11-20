@@ -4,7 +4,7 @@
 
 #include "types.h"
 
-#define SSHOS_VERSION "0.1"
+#define SSHOS_VERSION "0.2"
 
 /* Values captured from the ROM's globals at start-up (machine.c). */
 struct machine {
@@ -214,6 +214,8 @@ int  vt_app_keys(void);
 int  vt_reply(u8 *out, int max);
 void vt_end(void);
 extern u8 vt_log;
+extern u8 vt_hold, vt_step;
+void vt_show(void);
 
 /* gfx.c: drawing for programs with their own screen, and the mouse pointer */
 #define GFX_WHITE   0
@@ -371,7 +373,8 @@ extern u32 eth_poll_errors;
 void adb_init(void);
 void adb_start_polling(void);
 void adb_interrupt(void);
-extern volatile u32 adb_packets, adb_timeouts;
+void adb_watch(void);
+extern volatile u32 adb_packets, adb_timeouts, adb_restarts;
 
 /* kbd.c: key events. An event is (raw << 8) | character: raw is the ADB key
  * code with bit 7 set on release; character is 0 if the key has none, and

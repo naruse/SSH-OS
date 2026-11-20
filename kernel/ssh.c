@@ -38,6 +38,7 @@
 #define CHAN_PACKET     4096    /* most output the server may put in one packet */
 #define CHAN_WINDOW     16384   /* and how far it may run ahead of us: small, so
                                    that Control-C takes effect soon */
+#define SHOW_EVERY      6               /* ticks, at least, between looks at text that pours in */
 #define WAIT            (30 * 60)       /* ticks to wait for an answer */
 
 #define MSG_DISCONNECT          1
@@ -1462,6 +1463,10 @@ static int key_bytes(u8 *out, int ev)
     u32 cp;
     int i, n = 0;
 
+    /* The SE's own keyboard has no Page Up or Page Down, Home or End:
+     * Command with an arrow stands in for them. */
+    if (kbd_modifiers() & KBD_COMMAND)
+        raw = raw == 0x3E ? 0x74 : raw == 0x3D ? 0x79 : raw == 0x3B ? 0x73 : raw == 0x3C ? 0x77 : raw;
     for (i = 0; i < (int)(sizeof special / sizeof special[0]); i++)
         if (special[i].raw == raw) {
             n = (int)strlen(special[i].seq);
@@ -1500,7 +1505,16 @@ static int session(const char *host)
 {
     u8 keys[120];
     int r = 0, ev, n, quit = 0, busy_now;
+    u32 shown = ticks, wait = SHOW_EVERY, streak = 0;
 
+    /* Text is drawn when no more is waiting, or SHOW_EVERY ticks after the
+     * last time: what a long listing sends between two looks scrolls by
+     * without being drawn at all. */
+    /* Scrolling goes a line at a time, each one drawn, which is what looks
+     * smooth. Only when packets come one on the heels of another, with
+     * never a moment to spare, are the steps made bigger to keep up. */
+    vt_hold = 1;
+    vt_step = 1;
     while (!quit && !ssh.chan_closed) {
         busy_now = 0;
         net_poll();
@@ -1509,9 +1523,25 @@ static int session(const char *host)
             break;
         if (r > 0) {
             busy_now = 1;
+            if (streak < 255)
+                streak++;
+            vt_step = streak < 6 ? 1 : streak < 12 ? 2 : streak < 24 ? 4 : 0;
             r = handle(r, host);
             if (r)
                 break;
+            if (ticks - shown >= wait) {
+                shown = ticks;
+                vt_show();
+                wait = (ticks - shown) * 3 / 2;         /* a third of the time drawing, no more */
+                if (wait < SHOW_EVERY)
+                    wait = SHOW_EVERY;
+                shown = ticks;
+            }
+        } else {
+            vt_show();
+            shown = ticks;
+            wait = SHOW_EVERY;
+            streak = 0;
         }
 
         /* Keys. Command-Q or Control-] leaves. */
@@ -1548,6 +1578,9 @@ static int session(const char *host)
             bar_work();
         }
     }
+    vt_hold = 0;
+    vt_step = 0;
+    vt_show();
     vt_cursor(0);
     if (r < 0)
         return r;
@@ -1649,7 +1682,8 @@ void cmd_ssh(int argc, char **argv)
     crypto_stop = 0;
     started = ticks;
 
-    kputs("Making a one-time key (each of these steps takes this machine a while)");
+    kputs(copro_present() ? "Making a one-time key"
+                          : "Making a one-time key (each of these steps takes this machine a while)");
     make_pair();
     if (crypto_stop) {
         crypto_idle = NULL;
