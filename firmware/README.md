@@ -13,7 +13,7 @@ press is quicker done at home than sent down the cable and back.
 **Status: it runs on a real SE with a BlueSCSI v2 and a Pico W**, and
 connecting is far quicker with it; how much has not been timed yet. Each
 release of SSH OS holds the firmware ready built, and the source is a
-branch of BlueSCSI's: <https://github.com/naruse/BlueSCSI-v2/tree/sshos-crypto>.
+branch of BlueSCSI's: <https://github.com/naruse/BlueSCSI-v2/tree/sshos>.
 What the tests check: the code on the firmware's side gives the published
 answers when built for an ordinary computer and agrees to the byte with
 what SSH OS does itself (`make test-fw-host`); SSH OS logs in to a real
@@ -27,8 +27,9 @@ comes and with this one.
 
 ## How it talks
 
-A SCSI command of our own, `0x1D`, on the network adapter (the one the
-firmware's own WiFi commands, `0x1C`, already use). The request is the
+A SCSI command of our own, `0xF5`, on the network adapter. It is in the
+range SCSI leaves to each maker (`C0` to `FF`), and a BlueSCSI without
+this addition refuses it as a command it does not know. The request is the
 second byte:
 
 | Request | SSH OS writes | then reads back with `10` |
@@ -64,6 +65,10 @@ Then build as the BlueSCSI's own `BUILDING.md` says (target
 `Pico_DaynaPORT` for a BlueSCSI v2 with a Pico W), and flash the `.uf2` over
 USB. The branch above is this, done. `prepare.py` copies the files into `lib/SSHOS` and applies
 `bluescsi.patch`, made against BlueSCSI-v2 commit `5e64e3b`.
+
+The firmware is under the GNU General Public License, version 3
+(`GPL-3.0.txt` here, and in each release beside the firmware), and so is
+this addition as part of it.
 
 The firmware has about 9 KB of memory free and keeps most of its code in
 RAM, so the addition takes none of either: it works in the buffer the

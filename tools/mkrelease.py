@@ -38,8 +38,9 @@ of exactly this firmware is the branch
 
     %s
 
-and the same licence applies to it. There is no warranty.
-""" % "https://github.com/naruse/BlueSCSI-v2/tree/sshos-crypto"
+and the same licence applies to it: its text is GPL-3.0.txt, beside this
+file. There is no warranty.
+""" % "https://github.com/naruse/BlueSCSI-v2/tree/sshos"
 
 
 def version():
@@ -70,6 +71,7 @@ def main():
                     z.write(os.path.join(firmware, f), name + "/firmware/" + f)
             if firmware:
                 z.writestr(name + "/firmware/README.txt", FIRMWARE_NOTE)
+                z.write(os.path.join(ROOT, "firmware", "GPL-3.0.txt"), name + "/firmware/GPL-3.0.txt")
             z.write(os.path.join(ROOT, "LICENSE"), name + "/LICENSE")
     print("%s: %d KB" % (path, os.path.getsize(path) // 1024))
     with zipfile.ZipFile(path) as z:

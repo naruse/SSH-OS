@@ -2,14 +2,19 @@
  *
  * The SE's 68000 needs 12 to 20 seconds for each of the four big
  * calculations of an SSH log-in; the BlueSCSI's processor needs a few
- * thousandths of one. This is the part of the BlueSCSI firmware that does
+ * hundredths of one. This is the part of the BlueSCSI firmware that does
  * them when SSH OS asks, over the SCSI cable they already share: a command
- * of our own on the network adapter, next to the firmware's WiFi commands.
+ * of our own on the network adapter.
  *
- *   SCSI command 0x1D, six bytes: 1D, request, 0, length high, length low, 0
+ *   SCSI command 0xF5, six bytes: F5, request, 0, length high, length low, 0
+ *
+ * F5 is in the range SCSI leaves to each maker, and the firmware has no
+ * other use for it. (It was 1D at first, which is the standard SEND
+ * DIAGNOSTIC: a firmware without this addition did not refuse that, it
+ * waited for data.)
  *
  *   request 00  HELLO    read 8 bytes: "SSHOS", version, 0, 0. A firmware
- *                        without this answers nothing, and SSH OS then
+ *                        without this refuses the command, and SSH OS then
  *                        does the sums itself.
  *   request 01  X25519   write scalar (32), point (32)
  *   request 02  PUBLIC   write seed (32): the Ed25519 public key for it
@@ -34,7 +39,7 @@
  *
  * The arithmetic is SSH OS's own (kernel/x25519.c, ed25519.c, sha512.c),
  * the same files the SE runs and the tests check; nothing here depends on
- * the BlueSCSI. In the firmware, network.c hands command 0x1D to
+ * the BlueSCSI. In the firmware, network.c hands command 0xF5 to
  * sshos_crypto_job(), which works in the buffer the request arrived in and
  * leaves the answer there: the firmware has some 9 KB of memory free, and
  * none of it to spare for a buffer of our own. For the same reason the

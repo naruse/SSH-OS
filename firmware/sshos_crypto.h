@@ -2,7 +2,9 @@
 #ifndef SSHOS_CRYPTO_H
 #define SSHOS_CRYPTO_H
 
-#define SSHOS_CRYPTO_CMD        0x1D    /* the SCSI command */
+#define SSHOS_CRYPTO_CMD        0xF5    /* the SCSI command: one of those SCSI leaves to
+                                         * each maker (C0 to FF), which this firmware
+                                         * reads as six bytes and has no other use for */
 #define SSHOS_HELLO             0x00    /* its requests, in the second byte */
 #define SSHOS_X25519            0x01
 #define SSHOS_PUBLIC            0x02

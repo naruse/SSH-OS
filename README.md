@@ -85,7 +85,7 @@ the SD card and switch on; the BlueSCSI takes it in and removes the file.
 far.) To go back, put BlueSCSI's own release on the same way.
 
 The firmware is BlueSCSI's, under its licence (GPL 3), with our addition:
-[the source](https://github.com/naruse/BlueSCSI-v2/tree/sshos-crypto), and what the addition does in
+[the source](https://github.com/naruse/BlueSCSI-v2/tree/sshos), and what the addition does in
 [firmware/](firmware/README.md).
 
 ## Keys

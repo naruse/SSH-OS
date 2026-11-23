@@ -6,7 +6,7 @@
 Copies the arithmetic (kernel/x25519.c, ed25519.c, sha512.c, poly1305.c) and the
 request handler (firmware/sshos_crypto.c) into lib/SSHOS of that source
 tree, and applies firmware/bluescsi.patch, which makes the network adapter
-answer SCSI command 0x1D and adds the new files to the build. After that
+answer SCSI command 0xF5 and adds the new files to the build. After that
 the firmware is built the BlueSCSI way (its BUILDING.md). See README.md
 here.
 
